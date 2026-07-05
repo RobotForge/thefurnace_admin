@@ -667,6 +667,20 @@ function BuyerDiscoveryTab() {
 
 // ─── Competitor Intel (Tab 3) ─────────────────────────────────────────────────
 
+function HandleCell({ handle, color }) {
+  if (!handle?.handle) return <td className="px-4 py-3 text-gray-700 text-[10px]">—</td>;
+  return (
+    <td className="px-4 py-3 whitespace-nowrap">
+      <a href={handle.url} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-1 text-[10px] font-medium hover:underline"
+        style={{ color }}>
+        @{handle.handle}
+        <ExternalLink size={8} className="opacity-60" />
+      </a>
+    </td>
+  );
+}
+
 const TYPE_META = {
   direct:   { color: '#EF4444', label: 'Direct' },
   adjacent: { color: '#F59E0B', label: 'Adjacent' },
@@ -688,7 +702,7 @@ function CompetitorIntelTab() {
     if (!problem.trim()) { setError('Problem description is required'); return; }
     setError(null); setRunning(true); setResult(null);
     try {
-      const r = await httpsCallable(functions, 'adminFindCompetitors', { timeout: 60000 })({ problem });
+      const r = await httpsCallable(functions, 'adminFindCompetitors', { timeout: 120000 })({ problem });
       setResult(r.data);
       const n = r.data?.companies?.length ?? 0;
       showToast(`${n} compan${n !== 1 ? 'ies' : 'y'} found`);
@@ -714,7 +728,7 @@ function CompetitorIntelTab() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#0D0D0D]">
-              {['#', 'Name', 'Category', 'Description', 'Website'].map(h => (
+              {['#', 'Name', 'Category', 'Description', 'Website', 'Instagram', 'LinkedIn', 'TikTok'].map(h => (
                 <th key={h} className="px-4 py-2.5 text-[9px] font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -746,6 +760,9 @@ function CompetitorIntelTab() {
                     </a>
                   ) : <span className="text-gray-700">—</span>}
                 </td>
+                <HandleCell handle={c.handles?.instagram} color="#E1306C" />
+                <HandleCell handle={c.handles?.linkedin}  color="#0A66C2" />
+                <HandleCell handle={c.handles?.tiktok}    color="#888888" />
               </tr>
             ))}
           </tbody>
@@ -791,7 +808,7 @@ function CompetitorIntelTab() {
           </button>
           {running && (
             <p className="text-[10px] text-amber-400 animate-pulse">
-              Searching Tavily → extracting with Gemini…
+              Tavily → Gemini → SocialCrawl handles…
             </p>
           )}
         </div>
