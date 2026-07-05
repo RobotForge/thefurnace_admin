@@ -8,6 +8,7 @@ import {
   Search, Crosshair, ChevronDown, ChevronRight, AlertCircle,
 } from 'lucide-react';
 
+
 const inputCls = 'w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#3B82F6]/50';
 
 // ─── SocialCrawl Search Test (Tab 1) ──────────────────────────────────────────
@@ -260,136 +261,128 @@ function TraceTag({ traceId }) {
   );
 }
 
-function ProfileRow({ profile, i }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-[#141414] last:border-0">
-      <div className="flex items-start gap-3 px-4 py-3 hover:bg-white/[0.015] transition-colors cursor-pointer"
-        onClick={() => setOpen(o => !o)}>
-        <span className="text-[10px] text-gray-700 w-5 flex-shrink-0 pt-0.5">{i + 1}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <PlatformBadge platform={profile.platform} />
-            {profile.profile_url ? (
-              <a href={profile.profile_url} target="_blank" rel="noopener noreferrer"
-                className="text-[11px] font-semibold text-white hover:text-[#3B82F6] transition-colors flex items-center gap-1"
-                onClick={e => e.stopPropagation()}>
-                @{profile.handle}
-                <ExternalLink size={9} />
-              </a>
-            ) : (
-              <span className="text-[11px] font-semibold text-white">@{profile.handle}</span>
-            )}
-            {profile.display_name !== profile.handle && (
-              <span className="text-[10px] text-gray-500">{profile.display_name}</span>
-            )}
-            {profile.verified && <CheckCircle size={10} className="text-[#3B82F6]" />}
-            <div className="flex gap-1">
-              {profile.trace_tags.map(t => <TraceTag key={t} traceId={t} />)}
-            </div>
-          </div>
-          {profile.evidence[0]?.text && (
-            <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">
-              {profile.evidence[0].text}
-            </p>
-          )}
-        </div>
-        <span className="text-gray-700 flex-shrink-0 mt-0.5">
-          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        </span>
-      </div>
-      {open && (
-        <div className="px-4 pb-3 ml-8 space-y-2">
-          {profile.evidence.map((ev, j) => (
-            <div key={j} className="bg-[#0A0A0A] rounded-lg p-2.5 text-[10px]">
-              <div className="flex items-center gap-2 mb-1">
-                <TraceTag traceId={ev.trace_id} />
-                <span className="text-gray-600">{ev.source_label}</span>
-                {ev.source_url && (
-                  <a href={ev.source_url} target="_blank" rel="noopener noreferrer"
-                    className="text-[#3B82F6] hover:underline flex items-center gap-0.5 ml-auto">
-                    <ExternalLink size={9} />
-                    <span>source</span>
-                  </a>
-                )}
-              </div>
-              {ev.text && <p className="text-gray-400 leading-relaxed">{ev.text}</p>}
-            </div>
-          ))}
-          <p className="text-[9px] text-gray-700">path: {profile.resolution_path}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TraceCard({ trace }) {
-  const [open, setOpen] = useState(false);
+function TraceSection({ trace }) {
   const meta = TRACE_META[trace.trace_id] || { color: '#6B7280', badge: trace.trace_id };
   const profileCount = trace.profiles?.length ?? 0;
-  const hasError = !!trace.error;
-  const isContentOnly = trace.trace_id === 'trace_4';
+  const hasError     = !!trace.error;
+  const isContent    = trace.trace_id === 'trace_4';
 
   return (
     <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
-      <div className="px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.015]"
-        onClick={() => setOpen(o => !o)}>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
-            style={{ background: `${meta.color}22`, color: meta.color }}>
-            {meta.badge}
-          </span>
-          <span className="text-xs font-semibold text-white truncate">{trace.label}</span>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+      {/* Header — always visible */}
+      <div className="px-5 py-3.5 flex items-center gap-3 border-b border-[#1E1E1E]">
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md flex-shrink-0"
+          style={{ background: `${meta.color}20`, color: meta.color }}>
+          {meta.badge}
+        </span>
+        <span className="text-xs font-bold text-white flex-1">{trace.label}</span>
+        <div className="flex items-center gap-2 flex-shrink-0">
           {hasError && <AlertCircle size={12} className="text-red-400" />}
-          {isContentOnly ? (
-            <span className="text-[9px] text-gray-600 uppercase tracking-wider">content only</span>
+          {isContent ? (
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#1E1E1E] text-gray-500 uppercase tracking-wider">
+              Content signal only
+            </span>
           ) : (
-            <span className="text-[10px] font-bold" style={{ color: profileCount > 0 ? meta.color : '#4B5563' }}>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{
+                background: profileCount > 0 ? `${meta.color}18` : '#1E1E1E',
+                color:      profileCount > 0 ? meta.color : '#4B5563',
+              }}>
               {profileCount} profile{profileCount !== 1 ? 's' : ''}
             </span>
           )}
-          {open ? <ChevronDown size={12} className="text-gray-600" /> : <ChevronRight size={12} className="text-gray-600" />}
         </div>
       </div>
 
-      {open && (
-        <div className="border-t border-[#1E1E1E]">
-          {hasError && (
-            <p className="px-4 py-2.5 text-[10px] text-red-400">Error: {trace.error}</p>
+      {/* Error */}
+      {hasError && (
+        <p className="px-5 py-3 text-[10px] text-red-400 border-b border-[#1E1E1E]">
+          Error: {trace.error}
+        </p>
+      )}
+
+      {/* Trace 4 — content signals */}
+      {isContent && (
+        <div className="px-5 py-3">
+          <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-2.5">{trace.note}</p>
+          {(trace.content_signals || []).length === 0 && (
+            <p className="text-[10px] text-gray-600">No content signals found</p>
           )}
-          {isContentOnly && trace.content_signals?.length > 0 && (
-            <div className="px-4 py-3 space-y-2">
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-2">{trace.note}</p>
-              {trace.content_signals.map((s, i) => (
-                <div key={i} className="flex items-start gap-2 text-[10px]">
-                  <span className="text-gray-700 flex-shrink-0">{i + 1}.</span>
-                  <div className="min-w-0">
-                    <p className="text-gray-300 truncate">{s.title}</p>
-                    {s.url && (
-                      <a href={s.url} target="_blank" rel="noopener noreferrer"
-                        className="text-[#3B82F6] hover:underline flex items-center gap-1 text-[9px]">
-                        <ExternalLink size={8} />
-                        <span className="truncate max-w-[200px] block">{s.url}</span>
-                      </a>
-                    )}
-                    {s.views && <span className="text-gray-700">{s.views.toLocaleString()} views</span>}
-                  </div>
-                </div>
-              ))}
+          {(trace.content_signals || []).map((s, i) => (
+            <div key={i} className="flex items-start gap-3 py-2 border-b border-[#141414] last:border-0">
+              <span className="text-[10px] text-gray-700 w-5 flex-shrink-0">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-gray-300">{s.title}</p>
+                {s.url && (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer"
+                    className="text-[9px] text-[#3B82F6] hover:underline flex items-center gap-1 mt-0.5">
+                    <ExternalLink size={8} />
+                    <span className="truncate max-w-[320px] block">{s.url}</span>
+                  </a>
+                )}
+              </div>
+              {s.views != null && (
+                <span className="text-[9px] text-gray-600 flex-shrink-0">{Number(s.views).toLocaleString()} views</span>
+              )}
             </div>
-          )}
-          {!isContentOnly && profileCount === 0 && !hasError && (
-            <p className="px-4 py-3 text-[10px] text-gray-600">No profiles found for this trace</p>
-          )}
-          {!isContentOnly && profileCount > 0 && (
-            <div>
-              {(trace.profiles || []).map((p, i) => (
-                <ProfileRow key={p.id} profile={p} i={i} />
-              ))}
-            </div>
-          )}
+          ))}
+        </div>
+      )}
+
+      {/* Profile table */}
+      {!isContent && profileCount === 0 && !hasError && (
+        <p className="px-5 py-4 text-[10px] text-gray-600">No profiles found for this trace</p>
+      )}
+      {!isContent && profileCount > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#0D0D0D]">
+                {['#', 'Platform', 'Handle', 'Name', 'Evidence', 'Source'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-[9px] font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#141414]">
+              {(trace.profiles || []).map((p, i) => {
+                const ev = p.evidence?.[0];
+                return (
+                  <tr key={p.id} className="hover:bg-white/[0.015] transition-colors">
+                    <td className="px-4 py-3 text-[10px] text-gray-700 w-6">{i + 1}</td>
+                    <td className="px-4 py-3"><PlatformBadge platform={p.platform} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {p.profile_url ? (
+                        <a href={p.profile_url} target="_blank" rel="noopener noreferrer"
+                          className="text-[11px] font-semibold text-white hover:text-[#3B82F6] transition-colors flex items-center gap-1">
+                          @{p.handle}
+                          <ExternalLink size={9} className="text-gray-600" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-white">@{p.handle}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-[10px] text-gray-500 whitespace-nowrap max-w-[120px]">
+                      <span className="truncate block">{p.display_name !== p.handle ? p.display_name : ''}</span>
+                    </td>
+                    <td className="px-4 py-3 text-[10px] text-gray-400 max-w-[280px]">
+                      <p className="line-clamp-2 leading-relaxed">{ev?.text || ev?.source_label || '—'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {ev?.source_url ? (
+                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer"
+                          className="text-[#3B82F6] hover:underline flex items-center gap-1 text-[9px] whitespace-nowrap">
+                          <ExternalLink size={9} />
+                          source
+                        </a>
+                      ) : <span className="text-gray-700">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -635,10 +628,10 @@ function BuyerDiscoveryTab() {
           {/* Stage 0 */}
           <Stage0Card entities={result.stage0 || {}} />
 
-          {/* Trace cards — 2 columns */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Trace sections — one per trace, full width */}
+          <div className="space-y-3">
             {(result.traces || []).map(trace => (
-              <TraceCard key={trace.trace_id} trace={trace} />
+              <TraceSection key={trace.trace_id} trace={trace} />
             ))}
           </div>
 
@@ -656,9 +649,6 @@ function BuyerDiscoveryTab() {
               </div>
             </div>
           )}
-
-          {/* Full deduplicated table */}
-          <AllProfilesTable profiles={result.all_profiles || []} />
 
           {/* Raw JSON */}
           <details className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-2xl overflow-hidden">
