@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import {
   Play, ExternalLink, CheckCircle, XCircle,
-  Search, Crosshair, ChevronDown, ChevronRight, AlertCircle,
+  Search, Crosshair, ChevronDown, ChevronRight, AlertCircle, Map,
 } from 'lucide-react';
 
 
@@ -665,43 +665,212 @@ function BuyerDiscoveryTab() {
   );
 }
 
-// ─── Page Shell ───────────────────────────────────────────────────────────────
+// ─── Competitor Intel (Tab 3) ─────────────────────────────────────────────────
 
-export default function OutreachTestPage() {
-  const [activeTab, setActiveTab] = useState('search');
+const TYPE_META = {
+  direct:   { color: '#EF4444', label: 'Direct' },
+  adjacent: { color: '#F59E0B', label: 'Adjacent' },
+};
 
-  const tabs = [
-    { id: 'search',    label: 'SocialCrawl Test',  icon: <Search size={12} /> },
-    { id: 'discovery', label: 'Buyer Discovery',    icon: <Crosshair size={12} /> },
-  ];
+function CompetitorIntelTab() {
+  const [problem, setProblem] = useState('');
+  const [running, setRunning] = useState(false);
+  const [result,  setResult]  = useState(null);
+  const [error,   setError]   = useState(null);
+  const [toast,   setToast]   = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleRun = async () => {
+    if (!problem.trim()) { setError('Problem description is required'); return; }
+    setError(null); setRunning(true); setResult(null);
+    try {
+      const r = await httpsCallable(functions, 'adminFindCompetitors', { timeout: 60000 })({ problem });
+      setResult(r.data);
+      const n = r.data?.companies?.length ?? 0;
+      showToast(`${n} compan${n !== 1 ? 'ies' : 'y'} found`);
+    } catch (e) {
+      setError(e.message);
+      showToast(e.message || 'Request failed', 'error');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const direct   = result?.direct   ?? [];
+  const adjacent = result?.adjacent ?? [];
+  const sources  = result?.sources  ?? [];
+
+  const CompanyTable = ({ companies, type }) => {
+    if (!companies.length) return (
+      <p className="px-5 py-4 text-[10px] text-gray-600">None found</p>
+    );
+    const meta = TYPE_META[type] || { color: '#6B7280', label: type };
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-[#0D0D0D]">
+              {['#', 'Name', 'Category', 'Description', 'Website'].map(h => (
+                <th key={h} className="px-4 py-2.5 text-[9px] font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#141414]">
+            {companies.map((c, i) => (
+              <tr key={i} className="hover:bg-white/[0.015] transition-colors">
+                <td className="px-4 py-3 text-[10px] text-gray-700 w-6">{i + 1}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      style={{ background: `${meta.color}20`, color: meta.color }}>
+                      {meta.label}
+                    </span>
+                    <span className="text-[11px] font-semibold text-white">{c.name}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[10px] text-gray-500 whitespace-nowrap">{c.category || '—'}</td>
+                <td className="px-4 py-3 text-[10px] text-gray-400 max-w-[320px]">
+                  <span className="line-clamp-2">{c.description || '—'}</span>
+                </td>
+                <td className="px-4 py-3">
+                  {c.website ? (
+                    <a href={`https://${c.website.replace(/^https?:\/\//, '')}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-[#3B82F6] hover:underline flex items-center gap-1 text-[10px] whitespace-nowrap">
+                      <ExternalLink size={9} />
+                      {c.website}
+                    </a>
+                  ) : <span className="text-gray-700">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
-    <div className="p-8 space-y-6">
-      <div>
-        <h1 className="text-lg font-bold text-white">Outreach Test</h1>
-        <p className="text-xs text-gray-500 mt-1">Admin pipeline for validating social data sources</p>
-      </div>
+    <div className="space-y-5">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-lg border ${
+          toast.type === 'error'
+            ? 'bg-red-500/10 border-red-500/20 text-red-400'
+            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+        }`}>{toast.msg}</div>
+      )}
 
-      {/* Tab bar */}
-      <div className="flex gap-1 bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl p-1 w-fit">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === tab.id
-                ? 'bg-[#1E1E1E] text-white'
-                : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
+      <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5 space-y-4">
+        <div>
+          <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">
+            Product / Problem Description <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            rows={3}
+            className={`${inputCls} resize-none`}
+            placeholder="e.g. cement price volatility frustrates construction contractors who can't lock in quotes"
+            value={problem}
+            onChange={e => setProblem(e.target.value)}
+          />
+          <p className="text-[10px] text-gray-700 mt-1">
+            Tavily searches for solutions + alternatives · Gemini extracts the company list
+          </p>
+        </div>
+
+        {error && <p className="text-[10px] text-red-400">{error}</p>}
+
+        <div className="flex items-center gap-4">
+          <button onClick={handleRun} disabled={running}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50">
+            <Map size={13} />
+            {running ? 'Mapping market…' : 'Map Competitors'}
           </button>
-        ))}
+          {running && (
+            <p className="text-[10px] text-amber-400 animate-pulse">
+              Searching Tavily → extracting with Gemini…
+            </p>
+          )}
+        </div>
       </div>
 
-      {activeTab === 'search'    && <SearchTestTab />}
-      {activeTab === 'discovery' && <BuyerDiscoveryTab />}
+      {result && (
+        <>
+          {/* Summary */}
+          <div className="flex items-center gap-5 px-1 flex-wrap">
+            <span className="text-xs font-bold text-white">{result.companies?.length ?? 0} companies found</span>
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold"
+              style={{ background: '#EF444420', color: '#EF4444' }}>
+              {direct.length} direct
+            </span>
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold"
+              style={{ background: '#F59E0B20', color: '#F59E0B' }}>
+              {adjacent.length} adjacent
+            </span>
+          </div>
+
+          {/* Direct competitors */}
+          <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-[#1E1E1E] flex items-center gap-2">
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                style={{ background: '#EF444420', color: '#EF4444' }}>Direct</span>
+              <p className="text-xs font-bold text-white">Direct Competitors</p>
+              <span className="text-[10px] text-gray-600 ml-auto">{direct.length} found</span>
+            </div>
+            <CompanyTable companies={direct} type="direct" />
+          </div>
+
+          {/* Adjacent products */}
+          <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-[#1E1E1E] flex items-center gap-2">
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                style={{ background: '#F59E0B20', color: '#F59E0B' }}>Adjacent</span>
+              <p className="text-xs font-bold text-white">Adjacent Products</p>
+              <span className="text-[10px] text-gray-600 ml-auto">{adjacent.length} found</span>
+            </div>
+            <CompanyTable companies={adjacent} type="adjacent" />
+          </div>
+
+          {/* Sources */}
+          {sources.length > 0 && (
+            <details className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+              <summary className="px-5 py-3 text-[10px] font-bold text-gray-600 cursor-pointer hover:text-gray-400 uppercase tracking-wider">
+                Tavily sources ({sources.length})
+              </summary>
+              <div className="px-5 pb-4 space-y-1.5">
+                {sources.map((s, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-700 w-5">{i + 1}.</span>
+                    <a href={s.url} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] text-[#3B82F6] hover:underline truncate flex items-center gap-1">
+                      <ExternalLink size={9} />
+                      {s.title || s.url}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      )}
     </div>
   );
 }
+
+// ─── Page Shell ───────────────────────────────────────────────────────────────
+
+export default function OutreachTestPage() {
+  return (
+    <div className="p-8 space-y-6">
+      <div>
+        <h1 className="text-lg font-bold text-white">Competitor Intelligence</h1>
+        <p className="text-xs text-gray-500 mt-1">Map the competitive landscape from a problem description</p>
+      </div>
+      <CompetitorIntelTab />
+    </div>
+  );
+}
+
