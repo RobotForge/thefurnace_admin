@@ -3,37 +3,112 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { Play, ExternalLink, Users, Link2 } from 'lucide-react';
+import { Play, ExternalLink, Users, Link2, ChevronDown, ChevronUp } from 'lucide-react';
 
-const PLATFORMS = ['Instagram', 'LinkedIn', 'TikTok', 'Facebook'];
+const PLATFORM_COLORS = {
+  Instagram: { dot: 'bg-pink-500',   text: 'text-pink-400',   badge: 'bg-pink-500/10 border-pink-500/20 text-pink-400'   },
+  LinkedIn:  { dot: 'bg-blue-500',   text: 'text-blue-400',   badge: 'bg-blue-500/10 border-blue-500/20 text-blue-400'   },
+  TikTok:    { dot: 'bg-white',      text: 'text-white',      badge: 'bg-white/10 border-white/20 text-white'             },
+  Facebook:  { dot: 'bg-indigo-500', text: 'text-indigo-400', badge: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' },
+};
 
 const inputCls = 'w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#3B82F6]/50';
 
-function ResultSection({ icon: Icon, title, subtitle, items, renderItem, emptyMsg }) {
+function PlatformCard({ entry }) {
+  const [showPosts, setShowPosts] = useState(true);
+  const colors     = PLATFORM_COLORS[entry.platform] || PLATFORM_COLORS.Instagram;
+  const competitors = entry.competitors ?? [];
+  const posts       = entry.posts       ?? [];
+
   return (
     <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-[#1E1E1E] flex items-center gap-2.5">
-        <Icon size={12} className="text-gray-500" />
-        <div className="flex-1 min-w-0">
-          <span className="text-xs font-bold text-white">{title}</span>
-          {subtitle && <span className="text-[10px] text-gray-500 ml-2">{subtitle}</span>}
-        </div>
-        <span className="text-[10px] font-bold text-gray-600">{items.length}</span>
+
+      {/* Header */}
+      <div className="px-5 py-3.5 border-b border-[#1E1E1E] flex items-center gap-3">
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} />
+        <span className="text-xs font-bold text-white flex-1">{entry.platform}</span>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${colors.badge}`}>
+          {competitors.length} accounts · {posts.length} posts
+        </span>
       </div>
-      {items.length === 0 ? (
-        <p className="px-5 py-6 text-[11px] text-gray-600 text-center">{emptyMsg}</p>
-      ) : (
-        <div className="divide-y divide-[#1A1A1A]">
-          {items.map((item, i) => renderItem(item, i))}
+
+      {/* Competitor accounts */}
+      <div className="border-b border-[#1A1A1A]">
+        <div className="flex items-center gap-2 px-5 py-2.5">
+          <Users size={10} className="text-gray-600" />
+          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Competitor Accounts</span>
+          <span className="text-[10px] text-gray-700 ml-auto">{competitors.length}</span>
         </div>
-      )}
+        {competitors.length === 0 ? (
+          <p className="px-5 pb-3.5 text-[10px] text-gray-700">None found</p>
+        ) : (
+          <div className="divide-y divide-[#181818]">
+            {competitors.map((c, i) => (
+              <div key={i} className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.015] transition-colors">
+                <span className="text-[10px] text-gray-700 w-4 flex-shrink-0">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-white">@{c.handle || '—'}</p>
+                  <p className="text-[10px] text-gray-600 truncate">{c.url}</p>
+                </div>
+                {c.url && (
+                  <a href={c.url} target="_blank" rel="noopener noreferrer"
+                    className="text-gray-700 hover:text-[#3B82F6] transition-colors flex-shrink-0">
+                    <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Posts from those accounts */}
+      <div>
+        <button
+          onClick={() => setShowPosts(v => !v)}
+          className="flex items-center gap-2 px-5 py-2.5 w-full hover:bg-white/[0.015] transition-colors"
+        >
+          <Link2 size={10} className="text-gray-600" />
+          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex-1 text-left">
+            Posts (last 30 days)
+          </span>
+          <span className="text-[10px] text-gray-700">{posts.length}</span>
+          {showPosts ? <ChevronUp size={10} className="text-gray-700" /> : <ChevronDown size={10} className="text-gray-700" />}
+        </button>
+        {showPosts && (
+          posts.length === 0 ? (
+            <p className="px-5 pb-3.5 text-[10px] text-gray-700">
+              {entry.platform === 'Instagram'
+                ? 'Instagram posts are sparsely indexed — low Tavily coverage expected'
+                : 'No posts found in the last 30 days'}
+            </p>
+          ) : (
+            <div className="divide-y divide-[#181818]">
+              {posts.map((p, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.015] transition-colors">
+                  <span className="text-[10px] text-gray-700 w-4 flex-shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-gray-400 truncate">{p.url}</p>
+                    {p.competitorHandle && (
+                      <p className="text-[9px] text-gray-700 mt-0.5">@{p.competitorHandle}</p>
+                    )}
+                  </div>
+                  <a href={p.url} target="_blank" rel="noopener noreferrer"
+                    className="text-gray-700 hover:text-[#3B82F6] transition-colors flex-shrink-0">
+                    <ExternalLink size={11} />
+                  </a>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
     </div>
   );
 }
 
 export default function OutreachTestPage() {
   const [problem,  setProblem]  = useState('');
-  const [platform, setPlatform] = useState('Instagram');
   const [location, setLocation] = useState('');
   const [running,  setRunning]  = useState(false);
   const [result,   setResult]   = useState(null);
@@ -51,13 +126,13 @@ export default function OutreachTestPage() {
     setRunning(true);
     setResult(null);
     try {
-      const r = await httpsCallable(functions, 'adminRunOutreachTest', { timeout: 60000 })({
-        problem, platform, location,
+      const r = await httpsCallable(functions, 'adminRunOutreachTest', { timeout: 120000 })({
+        problem, location,
       });
       setResult(r.data);
-      const cc = r.data?.competitors?.length ?? 0;
-      const pc = r.data?.posts?.length ?? 0;
-      showToast(`Found ${cc} competitor account${cc !== 1 ? 's' : ''} · ${pc} direct post${pc !== 1 ? 's' : ''}`);
+      const totalAccounts = (r.data?.results ?? []).reduce((s, e) => s + (e.competitors?.length ?? 0), 0);
+      const totalPosts    = (r.data?.results ?? []).reduce((s, e) => s + (e.posts?.length    ?? 0), 0);
+      showToast(`${totalAccounts} accounts · ${totalPosts} posts across ${r.data?.results?.length ?? 0} platforms`);
     } catch (e) {
       setError(e.message);
       showToast(e.message || 'Search failed', 'error');
@@ -65,9 +140,6 @@ export default function OutreachTestPage() {
       setRunning(false);
     }
   };
-
-  const competitors = result?.competitors ?? [];
-  const posts       = result?.posts       ?? [];
 
   return (
     <div className="p-8">
@@ -80,9 +152,9 @@ export default function OutreachTestPage() {
       )}
 
       <div className="mb-6">
-        <h1 className="text-lg font-bold text-white">Competitor Search</h1>
+        <h1 className="text-lg font-bold text-white">Competitor + Post Search</h1>
         <p className="text-xs text-gray-500 mt-1">
-          Dry-run — finds competitor accounts <span className="text-gray-600">+</span> direct posts in parallel via Tavily
+          Two-step Tavily dry-run across all platforms — accounts then their posts (last 30 days)
         </p>
       </div>
 
@@ -104,14 +176,7 @@ export default function OutreachTestPage() {
                 value={problem}
                 onChange={e => setProblem(e.target.value)}
               />
-              <p className="text-[10px] text-gray-600 mt-1">Sent directly to Tavily as the search query</p>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Platform</label>
-              <select className={inputCls} value={platform} onChange={e => setPlatform(e.target.value)}>
-                {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <p className="text-[10px] text-gray-600 mt-1">Sent to Tavily for all platforms</p>
             </div>
 
             <div>
@@ -125,6 +190,18 @@ export default function OutreachTestPage() {
               />
             </div>
 
+            <div className="px-3 py-2.5 bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl">
+              <p className="text-[10px] text-gray-600 mb-1.5 font-bold uppercase tracking-wider">Platforms</p>
+              <div className="flex flex-wrap gap-1.5">
+                {['Instagram', 'LinkedIn', 'TikTok', 'Facebook'].map(p => (
+                  <span key={p} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${PLATFORM_COLORS[p]?.badge || ''}`}>
+                    {p}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[9px] text-gray-700 mt-1.5">Configured via SEARCH_PLATFORMS env var</p>
+            </div>
+
             {error && <p className="text-[10px] text-red-400">{error}</p>}
 
             <button
@@ -133,12 +210,12 @@ export default function OutreachTestPage() {
               className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50"
             >
               <Play size={13} />
-              {running ? 'Searching…' : 'Run Search'}
+              {running ? 'Searching all platforms…' : 'Run Search'}
             </button>
 
             {running && (
               <p className="text-[10px] text-center text-amber-400 animate-pulse">
-                Running both searches in parallel…
+                Step 1 → accounts · Step 2 → posts…
               </p>
             )}
           </div>
@@ -148,72 +225,32 @@ export default function OutreachTestPage() {
         <div className="col-span-2 space-y-4">
           {!result && !running && (
             <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-10 flex items-center justify-center min-h-[300px]">
-              <p className="text-sm text-gray-600">Run a search to see results</p>
+              <p className="text-sm text-gray-600">Run a search to see results by platform</p>
             </div>
           )}
 
           {running && (
             <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-10 flex items-center justify-center min-h-[300px]">
-              <p className="text-sm text-gray-600 animate-pulse">Finding competitor accounts + direct posts…</p>
+              <div className="text-center space-y-2">
+                <p className="text-sm text-gray-500 animate-pulse">Searching all platforms in parallel…</p>
+                <p className="text-[10px] text-gray-700">Step 1: finding competitor accounts · Step 2: finding their posts</p>
+              </div>
             </div>
           )}
 
           {result && (
             <>
-              {/* Status bar */}
               <div className="flex items-center justify-between px-1">
                 <p className="text-[10px] text-gray-500">
-                  {platform} · {location || 'any location'} · <span className="text-gray-400">"{problem}"</span>
+                  {location || 'any location'} · <span className="text-gray-400">"{problem}"</span>
                 </p>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
                   done
                 </span>
               </div>
-
-              {/* Competitor accounts */}
-              <ResultSection
-                icon={Users}
-                title="Competitor Accounts"
-                subtitle="profile-based (existing flow)"
-                items={competitors}
-                emptyMsg="No competitor accounts found — try a different query or check TAVILY_API_KEY"
-                renderItem={(c, i) => (
-                  <div key={i} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
-                    <span className="text-[10px] font-bold text-gray-600 w-5 flex-shrink-0">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white">@{c.handle || '—'}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{c.url}</p>
-                    </div>
-                    <span className="text-[10px] text-gray-600 flex-shrink-0">{c.platform || platform}</span>
-                    {c.url && (
-                      <a href={c.url} target="_blank" rel="noopener noreferrer"
-                        className="text-gray-600 hover:text-[#3B82F6] transition-colors flex-shrink-0">
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
-                  </div>
-                )}
-              />
-
-              {/* Direct posts */}
-              <ResultSection
-                icon={Link2}
-                title="Direct Posts"
-                subtitle="post URLs found via Tavily (new flow)"
-                items={posts}
-                emptyMsg={`No post URLs found — ${platform === 'Instagram' ? 'Instagram posts are sparsely indexed; try LinkedIn for better results' : 'try a more specific query'}`}
-                renderItem={(p, i) => (
-                  <div key={i} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
-                    <span className="text-[10px] font-bold text-gray-600 w-5 flex-shrink-0">{i + 1}</span>
-                    <p className="flex-1 text-[10px] text-gray-400 truncate min-w-0">{p.url}</p>
-                    <span className="text-[10px] text-gray-600 flex-shrink-0">{p.platform || platform}</span>
-                    <a href={p.url} target="_blank" rel="noopener noreferrer"
-                      className="text-gray-600 hover:text-[#3B82F6] transition-colors flex-shrink-0">
-                      <ExternalLink size={12} />
-                    </a>
-                  </div>
-                )}
-              />
+              {(result.results ?? []).map(entry => (
+                <PlatformCard key={entry.platform} entry={entry} />
+              ))}
             </>
           )}
         </div>
