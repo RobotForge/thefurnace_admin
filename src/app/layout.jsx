@@ -1,6 +1,8 @@
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'RobotForge Admin',
   description: 'Internal admin dashboard',

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { Users, FlaskConical, UserSearch, Zap } from 'lucide-react';
+import { Users, FlaskConical, Search, Zap } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, color = 'text-[#3B82F6]' }) {
   return (
@@ -50,7 +50,7 @@ export default function OverviewPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Users"       value={stats?.totalUsers}       icon={Users}       color="text-[#3B82F6]" />
           <StatCard label="Experiments"       value={stats?.totalExperiments} icon={FlaskConical} color="text-violet-400" />
-          <StatCard label="Leads"             value={stats?.totalLeads}       icon={UserSearch}  color="text-emerald-400" />
+          <StatCard label="Leads"             value={stats?.totalLeads}       icon={Search}      color="text-emerald-400" />
           <StatCard label="Active Sessions"   value={stats?.activeSessions}   icon={Zap}         color="text-amber-400" />
         </div>
       )}

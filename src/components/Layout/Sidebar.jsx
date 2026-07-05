@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, FlaskConical, UserSearch,
+  LayoutDashboard, Users, FlaskConical, Search,
   Megaphone, Globe, ListChecks, LogOut, Zap,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -12,7 +12,7 @@ const NAV = [
   { href: '/',                label: 'Overview',       icon: LayoutDashboard },
   { href: '/users',           label: 'Users',          icon: Users           },
   { href: '/experiments',     label: 'Experiments',    icon: FlaskConical    },
-  { href: '/leads',           label: 'Leads',          icon: UserSearch      },
+  { href: '/leads',           label: 'Leads',          icon: Search          },
   { href: '/lead-discovery',  label: 'Lead Discovery', icon: Zap             },
   { href: '/landing-pages',   label: 'Landing Pages',  icon: Globe           },
   { href: '/outreach-test',   label: 'Outreach Test',  icon: Megaphone       },
