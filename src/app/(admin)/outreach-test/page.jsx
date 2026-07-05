@@ -3,37 +3,36 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { Play, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
-
+import {
+  Play, ExternalLink, CheckCircle, XCircle,
+  Search, Crosshair, ChevronDown, ChevronRight, AlertCircle,
+} from 'lucide-react';
 
 const inputCls = 'w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#3B82F6]/50';
 
-// Derive columns dynamically from the first item in the result set.
+// ─── SocialCrawl Search Test (Tab 1) ──────────────────────────────────────────
+
 function getColumns(items) {
-  if (!items || items.length === 0) return [];
-  const sample = items[0];
+  if (!items?.length) return [];
+  const s = items[0];
   const cols = [];
-
-  const addCol = (key, src) => { if (src !== undefined && src !== null) cols.push(key); };
-
-  addCol('platform',     sample.platform);
-  addCol('username',     sample.author?.username);
-  addCol('display_name', sample.author?.display_name);
-  addCol('verified',     sample.author?.verified);
-  addCol('followers',    sample.author?.followers);
-  addCol('text',         sample.text);
-  addCol('url',          sample.url);
-  addCol('profile_url',  sample.author?.profile_url ?? sample.author?.url);
-  addCol('likes',        sample.engagement?.likes);
-  addCol('comments',     sample.engagement?.comments);
-  addCol('shares',       sample.engagement?.shares);
-  addCol('views',        sample.engagement?.views);
-  addCol('published_at', sample.published_at);
-  addCol('id',           sample.id);
-
+  const add = (k, v) => { if (v != null) cols.push(k); };
+  add('platform',     s.platform);
+  add('username',     s.author?.username);
+  add('display_name', s.author?.display_name);
+  add('verified',     s.author?.verified);
+  add('followers',    s.author?.followers);
+  add('text',         s.text);
+  add('url',          s.url);
+  add('profile_url',  s.author?.profile_url ?? s.author?.url);
+  add('likes',        s.engagement?.likes);
+  add('comments',     s.engagement?.comments);
+  add('shares',       s.engagement?.shares);
+  add('views',        s.engagement?.views);
+  add('published_at', s.published_at);
+  add('id',           s.id);
   return cols;
 }
-
 function getCell(item, col) {
   switch (col) {
     case 'platform':     return item.platform ?? '';
@@ -41,7 +40,7 @@ function getCell(item, col) {
     case 'display_name': return item.author?.display_name ?? '';
     case 'verified':     return item.author?.verified ? '✓' : '';
     case 'followers':    return item.author?.followers ?? '';
-    case 'text':         return item.text ?? '';
+    case 'text':         return item.content?.text ?? item.text ?? '';
     case 'url':          return item.url ?? '';
     case 'profile_url':  return item.author?.profile_url ?? item.author?.url ?? '';
     case 'likes':        return item.engagement?.likes ?? '';
@@ -53,14 +52,19 @@ function getCell(item, col) {
     default:             return '';
   }
 }
-
 const LINK_COLS = new Set(['url', 'profile_url']);
 const WIDE_COLS = new Set(['text']);
+const COL_LABEL = {
+  platform: 'Platform', username: 'Username', display_name: 'Name',
+  verified: 'Ver.', followers: 'Followers', text: 'Content',
+  url: 'Post URL', profile_url: 'Profile', likes: 'Likes',
+  comments: 'Comments', shares: 'Shares', views: 'Views',
+  published_at: 'Posted', id: 'ID',
+};
 
 function CellValue({ col, val }) {
   const str = String(val ?? '');
   if (!str) return <span className="text-gray-700">—</span>;
-
   if (LINK_COLS.has(col)) {
     return (
       <a href={str} target="_blank" rel="noopener noreferrer"
@@ -76,20 +80,9 @@ function CellValue({ col, val }) {
   return <span className="text-[10px] text-gray-400 whitespace-nowrap">{str}</span>;
 }
 
-const COL_LABEL = {
-  platform: 'Platform', username: 'Username', display_name: 'Name',
-  verified: 'Ver.', followers: 'Followers', text: 'Content',
-  url: 'Post URL', profile_url: 'Profile', likes: 'Likes',
-  comments: 'Comments', shares: 'Shares', views: 'Views',
-  published_at: 'Posted', id: 'ID',
-};
-
 function ResultTable({ items }) {
-  if (!items || items.length === 0) {
-    return <p className="px-5 py-8 text-xs text-gray-600 text-center">No results returned</p>;
-  }
+  if (!items?.length) return <p className="px-5 py-8 text-xs text-gray-600 text-center">No results returned</p>;
   const cols = getColumns(items);
-
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse">
@@ -120,12 +113,12 @@ function ResultTable({ items }) {
   );
 }
 
-export default function OutreachTestPage() {
-  const [problem,  setProblem]  = useState('');
-  const [running,  setRunning]  = useState(false);
-  const [result,    setResult]    = useState(null);
-  const [error,     setError]     = useState(null);
-  const [toast,     setToast]     = useState(null);
+function SearchTestTab() {
+  const [problem, setProblem] = useState('');
+  const [running, setRunning] = useState(false);
+  const [result,  setResult]  = useState(null);
+  const [error,   setError]   = useState(null);
+  const [toast,   setToast]   = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -134,15 +127,13 @@ export default function OutreachTestPage() {
 
   const handleRun = async () => {
     if (!problem.trim()) { setError('Problem description is required'); return; }
-    setError(null);
-    setRunning(true);
-    setResult(null);
+    setError(null); setRunning(true); setResult(null);
     try {
       const r = await httpsCallable(functions, 'adminRunOutreachTest', { timeout: 60000 })({ problem });
       setResult(r.data?.result);
-      const count   = r.data?.result?.data?.items?.length ?? 0;
-      const credits = r.data?.result?.credits_used ?? '?';
-      showToast(`${count} result${count !== 1 ? 's' : ''} · ${credits} credit${credits !== 1 ? 's' : ''} used`);
+      const count = r.data?.result?.data?.items?.length ?? 0;
+      const cred  = r.data?.result?.credits_used ?? '?';
+      showToast(`${count} result${count !== 1 ? 's' : ''} · ${cred} credit${cred !== 1 ? 's' : ''} used`);
     } catch (e) {
       setError(e.message);
       showToast(e.message || 'Request failed', 'error');
@@ -158,7 +149,7 @@ export default function OutreachTestPage() {
   const cached     = result?.cached;
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="space-y-4">
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-lg border ${
           toast.type === 'error'
@@ -167,14 +158,6 @@ export default function OutreachTestPage() {
         }`}>{toast.msg}</div>
       )}
 
-      <div>
-        <h1 className="text-lg font-bold text-white">SocialCrawl Search Test</h1>
-        <p className="text-xs text-gray-500 mt-1">
-          Natural language search across all platforms — same input as Tavily
-        </p>
-      </div>
-
-      {/* Input */}
       <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5 space-y-4">
         <div>
           <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">
@@ -189,15 +172,10 @@ export default function OutreachTestPage() {
           />
           <p className="text-[10px] text-gray-700 mt-1">Sent as the query to SocialCrawl /search/everywhere</p>
         </div>
-
         {error && <p className="text-[10px] text-red-400">{error}</p>}
-
         <div className="flex items-center gap-4">
-          <button
-            onClick={handleRun}
-            disabled={running}
-            className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50"
-          >
+          <button onClick={handleRun} disabled={running}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50">
             <Play size={13} />
             {running ? 'Searching…' : 'Search'}
           </button>
@@ -205,13 +183,10 @@ export default function OutreachTestPage() {
         </div>
       </div>
 
-      {/* Meta strip */}
       {result && (
         <div className="flex items-center gap-5 px-1 flex-wrap">
           <div className="flex items-center gap-1.5">
-            {result.success
-              ? <CheckCircle size={12} className="text-emerald-400" />
-              : <XCircle    size={12} className="text-red-400" />}
+            {result.success ? <CheckCircle size={12} className="text-emerald-400" /> : <XCircle size={12} className="text-red-400" />}
             <span className="text-[10px] text-gray-400">{result.success ? 'success' : 'error'}</span>
           </div>
           <span className="text-[10px] text-gray-500">{items.length} result{items.length !== 1 ? 's' : ''}</span>
@@ -222,7 +197,6 @@ export default function OutreachTestPage() {
         </div>
       )}
 
-      {/* Results table */}
       {result && (
         <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#1E1E1E]">
@@ -233,7 +207,6 @@ export default function OutreachTestPage() {
         </div>
       )}
 
-      {/* Raw JSON */}
       {result && (
         <details className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-2xl overflow-hidden">
           <summary className="px-5 py-3 text-[10px] font-bold text-gray-600 cursor-pointer hover:text-gray-400 uppercase tracking-wider">
@@ -244,6 +217,501 @@ export default function OutreachTestPage() {
           </pre>
         </details>
       )}
+    </div>
+  );
+}
+
+// ─── Buyer Discovery (Tab 2) ───────────────────────────────────────────────────
+
+const TRACE_META = {
+  trace_1:   { color: '#8B5CF6', badge: 'T1' },
+  trace_2:   { color: '#EF4444', badge: 'T2' },
+  trace_3:   { color: '#F59E0B', badge: 'T3' },
+  trace_4:   { color: '#6B7280', badge: 'T4' },
+  trace_5_6: { color: '#10B981', badge: 'T5/6' },
+  trace_7:   { color: '#EC4899', badge: 'T7' },
+  trace_8:   { color: '#3B82F6', badge: 'T8' },
+};
+
+const PLATFORM_COLORS = {
+  instagram: '#E1306C', linkedin: '#0A66C2', linkedin_company: '#0A66C2',
+  tiktok: '#000000', twitter: '#1DA1F2', reddit: '#FF4500',
+  youtube: '#FF0000', facebook: '#1877F2', app_store: '#0071E3',
+  play_store: '#34A853', forum: '#64748B',
+};
+
+function PlatformBadge({ platform }) {
+  const color = PLATFORM_COLORS[platform?.toLowerCase()] || '#6B7280';
+  return (
+    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
+      style={{ background: `${color}22`, color }}>
+      {platform?.replace('_', ' ') || '?'}
+    </span>
+  );
+}
+
+function TraceTag({ traceId }) {
+  const meta = TRACE_META[traceId] || { color: '#6B7280', badge: traceId };
+  return (
+    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold"
+      style={{ background: `${meta.color}22`, color: meta.color }}>
+      {meta.badge}
+    </span>
+  );
+}
+
+function ProfileRow({ profile, i }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-[#141414] last:border-0">
+      <div className="flex items-start gap-3 px-4 py-3 hover:bg-white/[0.015] transition-colors cursor-pointer"
+        onClick={() => setOpen(o => !o)}>
+        <span className="text-[10px] text-gray-700 w-5 flex-shrink-0 pt-0.5">{i + 1}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <PlatformBadge platform={profile.platform} />
+            {profile.profile_url ? (
+              <a href={profile.profile_url} target="_blank" rel="noopener noreferrer"
+                className="text-[11px] font-semibold text-white hover:text-[#3B82F6] transition-colors flex items-center gap-1"
+                onClick={e => e.stopPropagation()}>
+                @{profile.handle}
+                <ExternalLink size={9} />
+              </a>
+            ) : (
+              <span className="text-[11px] font-semibold text-white">@{profile.handle}</span>
+            )}
+            {profile.display_name !== profile.handle && (
+              <span className="text-[10px] text-gray-500">{profile.display_name}</span>
+            )}
+            {profile.verified && <CheckCircle size={10} className="text-[#3B82F6]" />}
+            <div className="flex gap-1">
+              {profile.trace_tags.map(t => <TraceTag key={t} traceId={t} />)}
+            </div>
+          </div>
+          {profile.evidence[0]?.text && (
+            <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">
+              {profile.evidence[0].text}
+            </p>
+          )}
+        </div>
+        <span className="text-gray-700 flex-shrink-0 mt-0.5">
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </span>
+      </div>
+      {open && (
+        <div className="px-4 pb-3 ml-8 space-y-2">
+          {profile.evidence.map((ev, j) => (
+            <div key={j} className="bg-[#0A0A0A] rounded-lg p-2.5 text-[10px]">
+              <div className="flex items-center gap-2 mb-1">
+                <TraceTag traceId={ev.trace_id} />
+                <span className="text-gray-600">{ev.source_label}</span>
+                {ev.source_url && (
+                  <a href={ev.source_url} target="_blank" rel="noopener noreferrer"
+                    className="text-[#3B82F6] hover:underline flex items-center gap-0.5 ml-auto">
+                    <ExternalLink size={9} />
+                    <span>source</span>
+                  </a>
+                )}
+              </div>
+              {ev.text && <p className="text-gray-400 leading-relaxed">{ev.text}</p>}
+            </div>
+          ))}
+          <p className="text-[9px] text-gray-700">path: {profile.resolution_path}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TraceCard({ trace }) {
+  const [open, setOpen] = useState(false);
+  const meta = TRACE_META[trace.trace_id] || { color: '#6B7280', badge: trace.trace_id };
+  const profileCount = trace.profiles?.length ?? 0;
+  const hasError = !!trace.error;
+  const isContentOnly = trace.trace_id === 'trace_4';
+
+  return (
+    <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+      <div className="px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.015]"
+        onClick={() => setOpen(o => !o)}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+            style={{ background: `${meta.color}22`, color: meta.color }}>
+            {meta.badge}
+          </span>
+          <span className="text-xs font-semibold text-white truncate">{trace.label}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+          {hasError && <AlertCircle size={12} className="text-red-400" />}
+          {isContentOnly ? (
+            <span className="text-[9px] text-gray-600 uppercase tracking-wider">content only</span>
+          ) : (
+            <span className="text-[10px] font-bold" style={{ color: profileCount > 0 ? meta.color : '#4B5563' }}>
+              {profileCount} profile{profileCount !== 1 ? 's' : ''}
+            </span>
+          )}
+          {open ? <ChevronDown size={12} className="text-gray-600" /> : <ChevronRight size={12} className="text-gray-600" />}
+        </div>
+      </div>
+
+      {open && (
+        <div className="border-t border-[#1E1E1E]">
+          {hasError && (
+            <p className="px-4 py-2.5 text-[10px] text-red-400">Error: {trace.error}</p>
+          )}
+          {isContentOnly && trace.content_signals?.length > 0 && (
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-2">{trace.note}</p>
+              {trace.content_signals.map((s, i) => (
+                <div key={i} className="flex items-start gap-2 text-[10px]">
+                  <span className="text-gray-700 flex-shrink-0">{i + 1}.</span>
+                  <div className="min-w-0">
+                    <p className="text-gray-300 truncate">{s.title}</p>
+                    {s.url && (
+                      <a href={s.url} target="_blank" rel="noopener noreferrer"
+                        className="text-[#3B82F6] hover:underline flex items-center gap-1 text-[9px]">
+                        <ExternalLink size={8} />
+                        <span className="truncate max-w-[200px] block">{s.url}</span>
+                      </a>
+                    )}
+                    {s.views && <span className="text-gray-700">{s.views.toLocaleString()} views</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!isContentOnly && profileCount === 0 && !hasError && (
+            <p className="px-4 py-3 text-[10px] text-gray-600">No profiles found for this trace</p>
+          )}
+          {!isContentOnly && profileCount > 0 && (
+            <div>
+              {(trace.profiles || []).map((p, i) => (
+                <ProfileRow key={p.id} profile={p} i={i} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stage0Card({ entities }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+      <div className="px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.015]"
+        onClick={() => setOpen(o => !o)}>
+        <div>
+          <p className="text-xs font-semibold text-white">Stage 0 — Entity Resolution</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            {entities.competitorHandles?.length ?? 0} competitors · {entities.complementaryApps?.length ?? 0} adjacent apps · {entities.competitorApps?.length ?? 0} competitor apps
+          </p>
+        </div>
+        {open ? <ChevronDown size={12} className="text-gray-600" /> : <ChevronRight size={12} className="text-gray-600" />}
+      </div>
+      {open && (
+        <div className="border-t border-[#1E1E1E] px-4 py-3 space-y-3">
+          {entities.competitorHandles?.length > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1.5">Competitor handles (Instagram seed)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {entities.competitorHandles.map((c, i) => (
+                  <a key={i} href={c.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2 py-1 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[10px] text-white hover:border-[#3B82F6]/50 transition-colors">
+                    @{c.handle}
+                    <ExternalLink size={8} className="text-gray-600" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {entities.complementaryApps?.length > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1.5">Adjacent apps</p>
+              <div className="flex flex-wrap gap-1.5">
+                {entities.complementaryApps.map((a, i) => (
+                  <span key={i} className="px-2 py-1 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[10px] text-gray-300">
+                    {a.name}{a.app_store_id ? ` (iOS: ${a.app_store_id})` : ''}{a.play_store_id ? ` (Play: ${a.play_store_id})` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {entities.competitorApps?.length > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1.5">Competitor apps</p>
+              <div className="flex flex-wrap gap-1.5">
+                {entities.competitorApps.map((a, i) => (
+                  <span key={i} className="px-2 py-1 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[10px] text-gray-300">
+                    {a.name}{a.app_store_id ? ` (iOS: ${a.app_store_id})` : ''}{a.play_store_id ? ` (Play: ${a.play_store_id})` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {!entities.competitorHandles?.length && !entities.complementaryApps?.length && (
+            <p className="text-[10px] text-gray-600">No entities resolved</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AllProfilesTable({ profiles }) {
+  if (!profiles?.length) return null;
+  return (
+    <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-[#1E1E1E]">
+        <p className="text-xs font-bold text-white">All Profiles — Deduplicated</p>
+        <p className="text-[10px] text-gray-500 mt-0.5">{profiles.length} unique profile{profiles.length !== 1 ? 's' : ''} across all traces</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-[#1E1E1E] bg-[#0D0D0D]">
+              {['#','Platform','Handle','Display Name','Profile','Traces','Evidence'].map(h => (
+                <th key={h} className="px-3 py-2.5 text-[10px] font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#141414]">
+            {profiles.map((p, i) => (
+              <tr key={p.id} className="hover:bg-white/[0.015] transition-colors">
+                <td className="px-3 py-2.5 text-[10px] text-gray-700 w-6">{i + 1}</td>
+                <td className="px-3 py-2.5"><PlatformBadge platform={p.platform} /></td>
+                <td className="px-3 py-2.5 text-[10px] text-white font-medium">@{p.handle}</td>
+                <td className="px-3 py-2.5 text-[10px] text-gray-400">{p.display_name}</td>
+                <td className="px-3 py-2.5">
+                  {p.profile_url ? (
+                    <a href={p.profile_url} target="_blank" rel="noopener noreferrer"
+                      className="text-[#3B82F6] hover:underline flex items-center gap-1 text-[10px]">
+                      <ExternalLink size={9} />
+                      <span className="truncate max-w-[120px] block">{p.profile_url}</span>
+                    </a>
+                  ) : <span className="text-gray-700">—</span>}
+                </td>
+                <td className="px-3 py-2.5">
+                  <div className="flex gap-1 flex-wrap">
+                    {p.trace_tags.map(t => <TraceTag key={t} traceId={t} />)}
+                  </div>
+                </td>
+                <td className="px-3 py-2.5 text-[10px] text-gray-500 max-w-[220px]">
+                  <span className="block line-clamp-2">{p.evidence[0]?.text || p.evidence[0]?.source_label || '—'}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const LOADING_STAGES = [
+  'Resolving entities (Tavily + Gemini)…',
+  'Running 7 traces in parallel…',
+  'Trace 1: Competitor post comments (Instagram)…',
+  'Trace 2: Reddit + forum complaints…',
+  'Trace 3: LinkedIn hiring signals…',
+  'Trace 4: YouTube search signals…',
+  'Trace 5/6: App store reviews…',
+  'Trace 7: Bad competitor reviews…',
+  'Trace 8: YouTube community comments…',
+  'Deduplicating profiles…',
+];
+
+function BuyerDiscoveryTab() {
+  const [form, setForm] = useState({
+    problem: '', productCategory: '', icpDescription: '', knownCompetitors: '', geography: '',
+  });
+  const [running, setRunning] = useState(false);
+  const [loadingStage, setLoadingStage] = useState(0);
+  const [result,  setResult]  = useState(null);
+  const [error,   setError]   = useState(null);
+  const [toast,   setToast]   = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleRun = async () => {
+    if (!form.problem.trim()) { setError('Problem description is required'); return; }
+    setError(null); setRunning(true); setResult(null); setLoadingStage(0);
+
+    // Cycle loading messages while waiting
+    const cycle = setInterval(() => {
+      setLoadingStage(s => (s + 1) % LOADING_STAGES.length);
+    }, 3000);
+
+    try {
+      const r = await httpsCallable(functions, 'adminRunBuyerDiscovery', { timeout: 300000 })(form);
+      const res = r.data?.result;
+      setResult(res);
+      const n = res?.total_unique_profiles ?? 0;
+      showToast(`${n} unique profile${n !== 1 ? 's' : ''} found across all traces`);
+    } catch (e) {
+      setError(e.message);
+      showToast(e.message || 'Request failed', 'error');
+    } finally {
+      clearInterval(cycle);
+      setRunning(false);
+    }
+  };
+
+  const field = (key, label, placeholder, type = 'text', required = false) => (
+    <div>
+      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {type === 'textarea' ? (
+        <textarea
+          rows={3}
+          className={`${inputCls} resize-none`}
+          placeholder={placeholder}
+          value={form[key]}
+          onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+        />
+      ) : (
+        <input
+          type="text"
+          className={inputCls}
+          placeholder={placeholder}
+          value={form[key]}
+          onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-lg border ${
+          toast.type === 'error'
+            ? 'bg-red-500/10 border-red-500/20 text-red-400'
+            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+        }`}>{toast.msg}</div>
+      )}
+
+      {/* Input form */}
+      <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5 space-y-4">
+        {field('problem', 'Problem Description', 'e.g. construction contractors struggle with cement price volatility', 'textarea', true)}
+        <div className="grid grid-cols-2 gap-3">
+          {field('productCategory', 'Product Category', 'e.g. SaaS, marketplace, hardware')}
+          {field('icpDescription', 'ICP Description', 'e.g. construction contractors in Nigeria')}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {field('knownCompetitors', 'Known Competitors (optional)', 'comma-separated names or handles')}
+          {field('geography', 'Geography (optional)', 'e.g. Nigeria, West Africa')}
+        </div>
+        {error && <p className="text-[10px] text-red-400">{error}</p>}
+        <div className="flex items-center gap-4">
+          <button onClick={handleRun} disabled={running}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50">
+            <Crosshair size={13} />
+            {running ? 'Running pipeline…' : 'Run Buyer Discovery'}
+          </button>
+          {running && (
+            <p className="text-[10px] text-amber-400 animate-pulse">{LOADING_STAGES[loadingStage]}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Results */}
+      {result && (
+        <>
+          {/* Summary bar */}
+          <div className="flex items-center gap-5 px-1 flex-wrap">
+            <span className="text-xs font-bold text-white">{result.total_unique_profiles} unique profiles</span>
+            <span className="text-[10px] text-gray-500">{result.traces?.length ?? 0} traces run</span>
+            <span className="text-[10px] text-gray-500">
+              {result.traces?.filter(t => (t.profiles?.length ?? 0) > 0).length ?? 0} traces with results
+            </span>
+          </div>
+
+          {/* Stage 0 */}
+          <Stage0Card entities={result.stage0 || {}} />
+
+          {/* Trace cards — 2 columns */}
+          <div className="grid grid-cols-2 gap-3">
+            {(result.traces || []).map(trace => (
+              <TraceCard key={trace.trace_id} trace={trace} />
+            ))}
+          </div>
+
+          {/* Coverage gaps */}
+          {result.coverage_gaps?.length > 0 && (
+            <div className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-2xl px-4 py-3">
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1.5">Coverage gaps</p>
+              <div className="flex flex-wrap gap-2">
+                {result.coverage_gaps.map((g, i) => (
+                  <span key={i} className="text-[10px] text-gray-600 flex items-center gap-1">
+                    <AlertCircle size={9} className="text-amber-600" />
+                    {g}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Full deduplicated table */}
+          <AllProfilesTable profiles={result.all_profiles || []} />
+
+          {/* Raw JSON */}
+          <details className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+            <summary className="px-5 py-3 text-[10px] font-bold text-gray-600 cursor-pointer hover:text-gray-400 uppercase tracking-wider">
+              Raw JSON response
+            </summary>
+            <pre className="px-5 pb-5 text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap break-words">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </details>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Page Shell ───────────────────────────────────────────────────────────────
+
+export default function OutreachTestPage() {
+  const [activeTab, setActiveTab] = useState('search');
+
+  const tabs = [
+    { id: 'search',    label: 'SocialCrawl Test',  icon: <Search size={12} /> },
+    { id: 'discovery', label: 'Buyer Discovery',    icon: <Crosshair size={12} /> },
+  ];
+
+  return (
+    <div className="p-8 space-y-6">
+      <div>
+        <h1 className="text-lg font-bold text-white">Outreach Test</h1>
+        <p className="text-xs text-gray-500 mt-1">Admin pipeline for validating social data sources</p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl p-1 w-fit">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeTab === tab.id
+                ? 'bg-[#1E1E1E] text-white'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'search'    && <SearchTestTab />}
+      {activeTab === 'discovery' && <BuyerDiscoveryTab />}
     </div>
   );
 }
