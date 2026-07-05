@@ -15,13 +15,17 @@ const firebaseConfig = {
   appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+// Guard: Firebase must only initialize in the browser.
+// During Next.js build-time static generation the env vars are absent,
+// and getAuth() would throw auth/invalid-api-key.
+const isBrowser = typeof window !== 'undefined';
 
-export const auth      = getAuth(app);
-auth.tenantId          = 'admin-tenant-jd6r5';
+const app           = isBrowser ? (getApps().length ? getApps()[0] : initializeApp(firebaseConfig)) : null;
 
-export const db        = getDatabase(app);
-export const functions = getFunctions(app, 'us-central1');
-export const googleProvider = new GoogleAuthProvider();
+export const auth           = isBrowser ? getAuth(app) : null;
+if (auth) auth.tenantId = 'admin-tenant-jd6r5';
+export const db             = isBrowser ? getDatabase(app) : null;
+export const functions      = isBrowser ? getFunctions(app, 'us-central1') : null;
+export const googleProvider = isBrowser ? new GoogleAuthProvider() : null;
 
 export const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
