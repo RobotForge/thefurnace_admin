@@ -728,7 +728,7 @@ function CompetitorIntelTab() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#0D0D0D]">
-              {['#', 'Name', 'Category', 'Description', 'Website', 'Instagram', 'LinkedIn', 'TikTok'].map(h => (
+              {['#', 'Name', 'Category', 'Description', 'Website', 'Instagram', 'LinkedIn', 'Twitter', 'TikTok'].map(h => (
                 <th key={h} className="px-4 py-2.5 text-[9px] font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -762,6 +762,7 @@ function CompetitorIntelTab() {
                 </td>
                 <HandleCell handle={c.handles?.instagram} color="#E1306C" />
                 <HandleCell handle={c.handles?.linkedin}  color="#0A66C2" />
+                <HandleCell handle={c.handles?.twitter}   color="#1DA1F2" />
                 <HandleCell handle={c.handles?.tiktok}    color="#888888" />
               </tr>
             ))}
@@ -808,7 +809,7 @@ function CompetitorIntelTab() {
           </button>
           {running && (
             <p className="text-[10px] text-amber-400 animate-pulse">
-              Tavily → Gemini → SocialCrawl handles…
+              Loop 1: mapping competitors · Loop 2: finding social profiles…
             </p>
           )}
         </div>
