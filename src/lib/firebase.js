@@ -18,6 +18,8 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 export const auth      = getAuth(app);
+auth.tenantId          = 'admin-tenant-jd6r5';
+
 export const db        = getDatabase(app);
 export const functions = getFunctions(app, 'us-central1');
 export const googleProvider = new GoogleAuthProvider();
