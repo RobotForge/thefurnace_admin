@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import {
   Play, ExternalLink, CheckCircle, XCircle,
-  Search, Crosshair, ChevronDown, ChevronRight, AlertCircle, Map,
+  Search, Crosshair, ChevronDown, ChevronRight, AlertCircle, Map, Send,
 } from 'lucide-react';
 
 
@@ -878,16 +878,230 @@ function CompetitorIntelTab() {
   );
 }
 
+// ─── Apollo Sourcing Test (Tab 4) ──────────────────────────────────────────────
+// Dry run of the Cold Email Apollo pipeline with the same input theScientist
+// supplies. Runs the real Apollo search + real enrichment cascade and shows the
+// sequence steps fully rendered, but never writes leads or sends anything.
+
+const DEFAULT_SEQUENCE_JSON = JSON.stringify([
+  { step: 1, day: 1, subject: 'Quick question for {{company}}', body: "Hi {{firstName}}, noticed you're leading growth at {{company}} — thought this might help. Check us out: {{websiteUrl}}" },
+], null, 2);
+
+function ScoreBadge({ status }) {
+  const ok = status === 'enriched';
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-500/15 text-gray-500'}`}>
+      {status || 'pending'}
+    </span>
+  );
+}
+
+function ApolloSourcingTab() {
+  const [form, setForm] = useState({
+    icpRole: '', industry: '', companySize: '', location: '', landingPageUrl: '',
+    sequence: DEFAULT_SEQUENCE_JSON,
+  });
+  const [running,  setRunning]  = useState(false);
+  const [result,   setResult]   = useState(null);
+  const [error,    setError]    = useState(null);
+  const [expanded, setExpanded] = useState(null);
+
+  const handleRun = async () => {
+    if (!form.icpRole.trim()) { setError('Target Role / Title is required'); return; }
+    setError(null); setRunning(true); setResult(null);
+    try {
+      const r = await httpsCallable(functions, 'adminTestApolloSourcing', { timeout: 120000 })(form);
+      setResult(r.data?.result);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const field = (key, label, placeholder) => (
+    <div>
+      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">{label}</label>
+      <input type="text" className={inputCls} placeholder={placeholder} value={form[key]}
+        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-500/5 border border-amber-500/15 rounded-2xl px-4 py-3">
+        <p className="text-[10px] text-amber-400 font-semibold">
+          Dry run — searches Apollo and runs the real enrichment cascade, but never writes leads or enrols anyone in a real sequence.
+        </p>
+      </div>
+
+      <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          {field('icpRole', 'Target Role / Title', 'e.g. CEO')}
+          {field('industry', 'Industry', 'e.g. Fintech')}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {field('companySize', 'Company Size', 'e.g. 10, 50 (employee range)')}
+          {field('location', 'Location', 'e.g. Nigeria')}
+        </div>
+        {field('landingPageUrl', 'Landing Page URL', 'https://...')}
+        <div>
+          <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Sequence JSON (same shape theScientist generates)</label>
+          <textarea rows={6} className={`${inputCls} resize-none font-mono text-[11px]`} value={form.sequence}
+            onChange={e => setForm(f => ({ ...f, sequence: e.target.value }))} />
+        </div>
+        {error && <p className="text-[10px] text-red-400">{error}</p>}
+        <button onClick={handleRun} disabled={running}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50">
+          <Play size={13} />
+          {running ? 'Running…' : 'Run Apollo Test'}
+        </button>
+      </div>
+
+      {result && (
+        <>
+          <div className="flex items-center gap-5 px-1 flex-wrap">
+            <span className="text-xs font-bold text-white">{result.totalFound} found in Apollo</span>
+            <span className="text-[10px] text-gray-500">{result.previewed} previewed (enriched + rendered)</span>
+          </div>
+          <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden divide-y divide-[#1A1A1A]">
+            {(result.leads || []).length === 0 && (
+              <p className="px-5 py-8 text-xs text-gray-600 text-center">No contacts returned for this search.</p>
+            )}
+            {(result.leads || []).map((lead, i) => (
+              <div key={i} className="px-5 py-3.5">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(expanded === i ? null : i)}>
+                  <span className="text-[10px] text-gray-700 w-5">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">{lead.name}</span>
+                      <ScoreBadge status={lead.enrichmentStatus} />
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{[lead.title, lead.company].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  {lead.email && <span className="text-[10px] text-blue-400">{lead.email}</span>}
+                  {expanded === i ? <ChevronDown size={12} className="text-gray-600" /> : <ChevronRight size={12} className="text-gray-600" />}
+                </div>
+                {expanded === i && (
+                  <div className="mt-3 pl-8 space-y-2">
+                    {(lead.renderedSteps || []).map((s, si) => (
+                      <div key={si} className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl p-3">
+                        <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Step {si + 1}{s.delayDays ? ` · +${s.delayDays}d` : ''}</p>
+                        {s.subject && <p className="text-[11px] font-semibold text-gray-200 mb-1">{s.subject}</p>}
+                        <p className="text-[10px] text-gray-400 whitespace-pre-wrap leading-relaxed">{s.body}</p>
+                      </div>
+                    ))}
+                    {(!lead.renderedSteps || lead.renderedSteps.length === 0) && (
+                      <p className="text-[10px] text-gray-600">No sequence steps provided.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Send Email Test (Tab 5) ───────────────────────────────────────────────────
+// Sends one real email through sendEmailViaNylas — the exact function every
+// theScientist sequence send (step0, scheduled steps, manual send) uses. Proves
+// the Nylas wiring works end-to-end. Uses the calling admin's own email grant.
+
+function EmailSendTestTab() {
+  const [to,      setTo]      = useState('');
+  const [subject, setSubject] = useState('Test email from theScientist');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result,  setResult]  = useState(null);
+  const [error,   setError]   = useState(null);
+
+  const handleSend = async () => {
+    if (!to.trim())      { setError('Email address is required'); return; }
+    if (!message.trim()) { setError('Message is required'); return; }
+    setError(null); setSending(true); setResult(null);
+    try {
+      const r = await httpsCallable(functions, 'adminTestSendEmail', { timeout: 30000 })({ to, subject, message });
+      setResult(r.data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-500/5 border border-amber-500/15 rounded-2xl px-4 py-3">
+        <p className="text-[10px] text-amber-400 font-semibold">
+          This sends a real email through sendEmailViaNylas — the same function every theScientist sequence step uses. Uses your own connected email grant (Integrations).
+        </p>
+      </div>
+
+      <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5 space-y-4">
+        <div>
+          <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">To</label>
+          <input type="email" className={inputCls} placeholder="you@example.com" value={to} onChange={e => setTo(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Subject</label>
+          <input type="text" className={inputCls} value={subject} onChange={e => setSubject(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Message</label>
+          <textarea rows={4} className={`${inputCls} resize-none`} placeholder="Short test message…" value={message} onChange={e => setMessage(e.target.value)} />
+        </div>
+        {error && <p className="text-[10px] text-red-400">{error}</p>}
+        <button onClick={handleSend} disabled={sending}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50">
+          <Send size={13} />
+          {sending ? 'Sending…' : 'Send Test Email'}
+        </button>
+      </div>
+
+      {result?.success && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+          <CheckCircle size={13} className="text-emerald-400" />
+          <p className="text-xs text-emerald-400">Sent — message id {result.messageId || '(none returned)'}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page Shell ───────────────────────────────────────────────────────────────
 
+const TABS = [
+  { id: 'search',      label: 'Search Test',      Comp: SearchTestTab },
+  { id: 'buyer',       label: 'Buyer Discovery',  Comp: BuyerDiscoveryTab },
+  { id: 'competitor',  label: 'Competitor Intel', Comp: CompetitorIntelTab },
+  { id: 'apollo',      label: 'Apollo Sourcing',  Comp: ApolloSourcingTab },
+  { id: 'email',       label: 'Send Email Test',  Comp: EmailSendTestTab },
+];
+
 export default function OutreachTestPage() {
+  const [tab, setTab] = useState('competitor');
+  const Active = TABS.find(t => t.id === tab)?.Comp || CompetitorIntelTab;
+
   return (
     <div className="p-8 space-y-6">
       <div>
-        <h1 className="text-lg font-bold text-white">Competitor Intelligence</h1>
-        <p className="text-xs text-gray-500 mt-1">Map the competitive landscape from a problem description</p>
+        <h1 className="text-lg font-bold text-white">Outreach Test</h1>
+        <p className="text-xs text-gray-500 mt-1">Test SocialCrawl search, buyer discovery, competitor mapping, Apollo sourcing, and email sending in isolation</p>
       </div>
-      <CompetitorIntelTab />
+      <div className="flex items-center gap-1 border-b border-[#1E1E1E]">
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px ${
+              tab === t.id ? 'text-white border-[#3B82F6]' : 'text-gray-600 border-transparent hover:text-gray-400'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <Active />
     </div>
   );
 }
