@@ -1018,6 +1018,11 @@ function EmailSendTestTab() {
   const [result,  setResult]  = useState(null);
   const [error,   setError]   = useState(null);
 
+  const [landingUrl, setLandingUrl] = useState('');
+  const [lpSending,  setLpSending]  = useState(false);
+  const [lpResult,   setLpResult]   = useState(null);
+  const [lpError,    setLpError]    = useState(null);
+
   const handleSend = async () => {
     if (!to.trim())      { setError('Email address is required'); return; }
     if (!message.trim()) { setError('Message is required'); return; }
@@ -1029,6 +1034,21 @@ function EmailSendTestTab() {
       setError(e.message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendLandingPage = async () => {
+    if (!to.trim()) { setLpError('Email address is required'); return; }
+    setLpError(null); setLpSending(true); setLpResult(null);
+    try {
+      const r = await httpsCallable(functions, 'adminTestSendLandingPageEmail', { timeout: 60000 })({
+        to, websiteUrl: landingUrl || undefined,
+      });
+      setLpResult(r.data);
+    } catch (e) {
+      setLpError(e.message);
+    } finally {
+      setLpSending(false);
     }
   };
 
@@ -1065,6 +1085,32 @@ function EmailSendTestTab() {
         <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
           <CheckCircle size={13} className="text-emerald-400" />
           <p className="text-xs text-emerald-400">Sent — message id {result.messageId || '(none returned)'}</p>
+        </div>
+      )}
+
+      <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5 space-y-4">
+        <div>
+          <p className="text-xs font-bold text-white">Landing Page Email (bookend sample)</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            Converts the sample "AI Lender Agent" landing page to email-safe HTML (scripts/forms stripped, CTAs → links, styles inlined) and sends it to the address above — the same content used for the first/last email in every sequence.
+          </p>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Landing Page URL (optional — CTA link target)</label>
+          <input type="text" className={inputCls} placeholder="https://example.com" value={landingUrl} onChange={e => setLandingUrl(e.target.value)} />
+        </div>
+        {lpError && <p className="text-[10px] text-red-400">{lpError}</p>}
+        <button onClick={handleSendLandingPage} disabled={lpSending}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-[#3B82F6] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-50">
+          <Send size={13} />
+          {lpSending ? 'Sending…' : 'Send Landing Page Email'}
+        </button>
+      </div>
+
+      {lpResult?.success && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+          <CheckCircle size={13} className="text-emerald-400" />
+          <p className="text-xs text-emerald-400">Sent — message id {lpResult.messageId || '(none returned)'}</p>
         </div>
       )}
     </div>
