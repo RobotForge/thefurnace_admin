@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 
@@ -12,6 +13,7 @@ const STATUS_COLOR = {
 };
 
 export default function ExperimentsPage() {
+  const router = useRouter();
   const [experiments, setExperiments] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
@@ -48,7 +50,11 @@ export default function ExperimentsPage() {
             </thead>
             <tbody>
               {experiments.map((e, i) => (
-                <tr key={e.firebaseId || i} className="border-b border-[#1A1A1A] last:border-0 hover:bg-white/[0.02] transition-colors">
+                <tr
+                  key={e.firebaseId || i}
+                  onClick={() => router.push(`/experiments/${e.firebaseId}`)}
+                  className="border-b border-[#1A1A1A] last:border-0 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                >
                   <td className="px-4 py-3 text-white font-medium max-w-[180px] truncate">{e.name}</td>
                   <td className="px-4 py-3 text-gray-400 font-mono text-[10px]">{e.userUid?.slice(0, 8)}…</td>
                   <td className="px-4 py-3">
