@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
-  ChevronDown, ChevronRight, Eye, MessageSquare,
+  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
@@ -34,6 +34,42 @@ function DetailField({ label, value }) {
     <div>
       <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">{label}</p>
       <p className="text-xs text-gray-300 leading-relaxed">{value}</p>
+    </div>
+  );
+}
+
+const APOLLO_PARAM_LABELS = {
+  personTitles:   'Person titles',
+  locations:      'Person locations',
+  keywords:       'Keywords (q_keywords)',
+  employeeRanges: 'Employee count range',
+  limit:          'Page size (per_page)',
+  page:           'Page',
+};
+
+function ParamValue({ value }) {
+  if (value == null || value === '') return <span className="text-gray-700">—</span>;
+  if (Array.isArray(value)) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {value.map((v, i) => (
+          <span key={i} className="text-[10px] text-gray-300 bg-white/5 border border-[#2A2A2A] rounded-md px-1.5 py-0.5">{String(v)}</span>
+        ))}
+      </div>
+    );
+  }
+  return <span className="text-[11px] text-gray-300">{String(value)}</span>;
+}
+
+function ApiCallCard({ icon: Icon, title, subtitle, color, empty, children }) {
+  return (
+    <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon size={13} style={{ color }} />
+        <p className="text-xs font-bold text-white">{title}</p>
+      </div>
+      {subtitle && <p className="text-[10px] text-gray-500 mb-3">{subtitle}</p>}
+      {empty ? <p className="text-[10px] text-gray-600 mt-2">{empty}</p> : <div className="mt-3 space-y-2.5">{children}</div>}
     </div>
   );
 }
@@ -136,7 +172,7 @@ export default function ExperimentDetailPage() {
     </div>
   );
 
-  const { experiment: e, leads, stats } = data;
+  const { experiment: e, leads, stats, apolloConfig, apolloParams, socialCrawlQueries } = data;
   const visibleLeads = leads.filter(l => filter === 'all' ? true : filter === 'inbound' ? l.isInbound : !l.isInbound);
 
   return (
@@ -192,6 +228,57 @@ export default function ExperimentDetailPage() {
             <DetailField label="Qualitative Learning" value={e.qualitativeLearning} />
           </div>
         )}
+      </div>
+
+      {/* API calls — exact values/filters sent to Apollo and SocialCrawl */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <ApiCallCard
+          icon={Target} color="#8B5CF6" title="Apollo API"
+          subtitle="Params sent to POST /mixed_people/api_search for outbound sourcing"
+          empty={!apolloParams ? 'No agent session found for this experiment (Apollo sourcing hasn’t run yet).' : null}
+        >
+          {apolloParams && Object.entries(APOLLO_PARAM_LABELS).map(([key, label]) => (
+            <div key={key}>
+              <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">{label}</p>
+              <ParamValue value={apolloParams[key]} />
+            </div>
+          ))}
+          {apolloConfig?.industry && !apolloParams?.keywords && (
+            <p className="text-[9px] text-amber-500/80 mt-1">Industry "{apolloConfig.industry}" set but not applied (no keywords resolved).</p>
+          )}
+        </ApiCallCard>
+
+        <ApiCallCard
+          icon={Search} color="#10B981" title="SocialCrawl API"
+          subtitle="Query variants sent to GET /search/everywhere during Problem Search"
+          empty={!socialCrawlQueries ? 'No Problem Search report found for this experiment.' : null}
+        >
+          {socialCrawlQueries && (
+            <>
+              <div>
+                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Sources filter</p>
+                <ParamValue value={socialCrawlQueries.platforms} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">
+                  Query strings ({socialCrawlQueries.queries.length})
+                </p>
+                {socialCrawlQueries.queries.length === 0 ? (
+                  <span className="text-gray-700 text-[10px]">—</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {socialCrawlQueries.queries.map((q, i) => (
+                      <span key={i} className="text-[10px] text-gray-300 bg-white/5 border border-[#2A2A2A] rounded-md px-2 py-1">{q}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {socialCrawlQueries.totalRawCount != null && (
+                <p className="text-[10px] text-gray-500">{socialCrawlQueries.totalRawCount} raw mentions returned across all queries</p>
+              )}
+            </>
+          )}
+        </ApiCallCard>
       </div>
 
       {/* Leads */}
