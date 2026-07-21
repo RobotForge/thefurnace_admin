@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
-  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target,
+  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
@@ -59,6 +59,60 @@ function ParamValue({ value }) {
     );
   }
   return <span className="text-[11px] text-gray-300">{String(value)}</span>;
+}
+
+// Unit costs range from ~$0.04 (image gen) down to ~$0.0000004 (a single chat
+// token-ish classification call) — a flat 2-decimal format would show "$0.00"
+// for most line items, so scale precision to the magnitude instead.
+function formatCost(n) {
+  const v = Number(n) || 0;
+  if (v === 0) return '$0.00';
+  if (v >= 0.01) return `$${v.toFixed(2)}`;
+  if (v >= 0.0001) return `$${v.toFixed(4)}`;
+  return `$${v.toFixed(6)}`;
+}
+
+const CATEGORY_LABELS = {
+  lead_enrichment:    'Lead enrichment',
+  email_verification: 'Email verification',
+  tavily_research:    'Tavily research',
+  social_crawl:        'Social crawl',
+  ai_generation:       'AI generation',
+  mailgun_send:        'Mailgun send',
+};
+
+function CostBreakdown({ costs }) {
+  const rows = costs?.byCategory || [];
+  return (
+    <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <DollarSign size={13} className="text-emerald-400" />
+          <p className="text-xs font-bold text-white">Cost Breakdown</p>
+        </div>
+        <p className="text-xs font-bold text-white">{formatCost(costs?.total)}</p>
+      </div>
+      <p className="text-[10px] text-gray-500 mb-3">API/AI spend recorded against this experiment</p>
+      {rows.length === 0 ? (
+        <p className="text-[10px] text-gray-600 mt-2">No costs recorded yet for this experiment.</p>
+      ) : (
+        <div className="space-y-1.5 mt-3">
+          {rows.map((r, i) => (
+            <div key={i} className="flex items-center justify-between bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-200 truncate">
+                  {CATEGORY_LABELS[r.category] || r.category}
+                  {r.subcategory && <span className="text-gray-500"> · {r.subcategory}</span>}
+                </p>
+                <p className="text-[9px] text-gray-600">{r.count} call{r.count === 1 ? '' : 's'}</p>
+              </div>
+              <span className="text-[11px] font-semibold text-gray-300 flex-shrink-0">{formatCost(r.totalCost)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ApiCallCard({ icon: Icon, title, subtitle, color, empty, children }) {
@@ -172,7 +226,7 @@ export default function ExperimentDetailPage() {
     </div>
   );
 
-  const { experiment: e, leads, stats, apolloConfig, apolloParams, socialCrawlQueries } = data;
+  const { experiment: e, leads, stats, costs, apolloConfig, apolloParams, socialCrawlQueries } = data;
   const visibleLeads = leads.filter(l => filter === 'all' ? true : filter === 'inbound' ? l.isInbound : !l.isInbound);
 
   return (
@@ -203,12 +257,13 @@ export default function ExperimentDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <StatCard icon={Users} label="Total Leads" value={stats.totalLeads} color="#3B82F6" />
         <StatCard icon={Inbox} label="Inbound (Form)" value={stats.inboundCount} color="#10B981" />
         <StatCard icon={Send} label="Outbound (Apollo)" value={stats.outboundCount} color="#8B5CF6" />
         <StatCard icon={Mail} label="Emails Sent" value={stats.totalEmailsSent} color="#F59E0B" />
         <StatCard icon={Eye} label="Page Visits" value={e.visitCount ?? '—'} color="#EC4899" />
+        <StatCard icon={DollarSign} label="Total Cost" value={formatCost(costs?.total)} color="#10B981" />
       </div>
 
       {/* Experiment details */}
@@ -229,6 +284,9 @@ export default function ExperimentDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Cost breakdown */}
+      <CostBreakdown costs={costs} />
 
       {/* API calls — exact values/filters sent to Apollo and SocialCrawl */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
