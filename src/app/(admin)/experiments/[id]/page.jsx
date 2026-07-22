@@ -172,7 +172,7 @@ function LeadRow({ lead, expanded, onToggle }) {
           {lead.status && (
             <p className="text-[10px] text-gray-500 mb-2">Status: <span className="text-gray-300">{lead.status}</span> · Source: <span className="text-gray-300">{lead.sourceType || lead.source || '—'}</span></p>
           )}
-          {lead.notes && <p className="text-[10px] text-gray-500 mb-2 italic">"{lead.notes}"</p>}
+          {lead.notes && <p className="text-[10px] text-gray-500 mb-2 italic">&quot;{lead.notes}&quot;</p>}
 
           {lead.emailsSent.length === 0 ? (
             <p className="text-[10px] text-gray-600">No emails sent to this lead yet.</p>
@@ -302,7 +302,7 @@ export default function ExperimentDetailPage() {
             </div>
           ))}
           {apolloConfig?.industry && !apolloParams?.keywords && (
-            <p className="text-[9px] text-amber-500/80 mt-1">Industry "{apolloConfig.industry}" set but not applied (no keywords resolved).</p>
+            <p className="text-[9px] text-amber-500/80 mt-1">Industry &quot;{apolloConfig.industry}&quot; set but not applied (no keywords resolved).</p>
           )}
         </ApiCallCard>
 

@@ -202,7 +202,7 @@ function SearchTestTab() {
         <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#1E1E1E]">
             <p className="text-xs font-bold text-white">Results — full schema</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">"{problem}"</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">&quot;{problem}&quot;</p>
           </div>
           <ResultTable items={items} />
         </div>
@@ -1092,7 +1092,7 @@ function EmailSendTestTab() {
         <div>
           <p className="text-xs font-bold text-white">Landing Page Email (bookend sample)</p>
           <p className="text-[10px] text-gray-500 mt-0.5">
-            Converts the sample "AI Lender Agent" landing page to email-safe HTML (scripts/forms stripped, CTAs → links, styles inlined) and sends it to the address above — the same content used for the first/last email in every sequence.
+            Converts the sample &quot;AI Lender Agent&quot; landing page to email-safe HTML (scripts/forms stripped, CTAs → links, styles inlined) and sends it to the address above — the same content used for the first/last email in every sequence.
           </p>
         </div>
         <div>
