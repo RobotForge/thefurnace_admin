@@ -7,6 +7,7 @@ import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
   ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign,
+  Pause, Play, RefreshCw,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
@@ -210,13 +211,69 @@ export default function ExperimentDetailPage() {
   const [error, setError]     = useState(null);
   const [expandedLead, setExpandedLead] = useState(null);
   const [filter, setFilter]   = useState('all'); // all | inbound | outbound
+  const [pausing, setPausing]     = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+  const [toast, setToast]         = useState(null);
 
-  useEffect(() => {
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const load = () => {
     httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
       .then(r => setData(r.data))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(load, [id]);
+
+  const handleTogglePause = async () => {
+    const isPaused = data?.agentSession?.status === 'admin_paused';
+    const uid = data?.experiment?.user?.uid;
+    if (!uid) { showToast('No agent session owner found for this experiment', 'error'); return; }
+
+    const confirmed = window.confirm(
+      isPaused
+        ? 'Resume this experiment? Sourcing, enrichment, and outreach will pick back up on the next cycle.'
+        : 'Pause this experiment? This stops new lead sourcing/enrollment AND any already-queued outreach sends for this experiment only.'
+    );
+    if (!confirmed) return;
+
+    setPausing(true);
+    try {
+      await httpsCallable(functions, isPaused ? 'adminResumeExperiment' : 'adminPauseExperiment')({
+        uid, experimentId: String(id),
+      });
+      load();
+      showToast(isPaused ? 'Experiment resumed' : 'Experiment paused');
+    } catch (e) {
+      showToast(e.message || 'Failed', 'error');
+    } finally {
+      setPausing(false);
+    }
+  };
+
+  const handleRerun = async () => {
+    const uid = data?.experiment?.user?.uid;
+    if (!uid) { showToast('No agent session owner found for this experiment', 'error'); return; }
+
+    const confirmed = window.confirm(
+      'Restart this experiment now? This immediately re-runs lead sourcing/enrichment/enrollment against its existing config, without waiting for the next scheduled cycle.'
+    );
+    if (!confirmed) return;
+
+    setRerunning(true);
+    try {
+      await httpsCallable(functions, 'adminRerunExperiment')({ uid, experimentId: String(id) });
+      showToast('Restart triggered — running in the background');
+    } catch (e) {
+      showToast(e.message || 'Failed', 'error');
+    } finally {
+      setRerunning(false);
+    }
+  };
 
   if (loading) return <div className="p-8 text-center text-sm text-gray-500">Loading experiment…</div>;
   if (error)   return (
@@ -226,11 +283,18 @@ export default function ExperimentDetailPage() {
     </div>
   );
 
-  const { experiment: e, leads, stats, costs, apolloConfig, apolloParams, socialCrawlQueries } = data;
+  const { experiment: e, leads, stats, costs, agentSession, apolloConfig, apolloParams, socialCrawlQueries } = data;
   const visibleLeads = leads.filter(l => filter === 'all' ? true : filter === 'inbound' ? l.isInbound : !l.isInbound);
+  const isPaused = agentSession?.status === 'admin_paused';
 
   return (
     <div className="p-8 space-y-6">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-lg border ${
+          toast.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+        }`}>{toast.msg}</div>
+      )}
+
       <button onClick={() => router.push('/experiments')} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-white transition-colors">
         <ArrowLeft size={13} /> Back to Experiments
       </button>
@@ -248,12 +312,31 @@ export default function ExperimentDetailPage() {
             #{e.number} · {e.user?.displayName || e.user?.email || 'Unknown founder'} · {e.channel || e.sprintType || '—'}
           </p>
         </div>
-        {e.landingPageUrl && (
-          <a href={e.landingPageUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#111] border border-[#1E1E1E] hover:border-blue-500/30 rounded-xl text-xs text-blue-400 transition-colors">
-            <ExternalLink size={12} /> View landing page
-          </a>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {agentSession && (
+            <>
+              <button onClick={handleRerun} disabled={rerunning}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-xl text-xs font-bold text-blue-400 transition-colors disabled:opacity-50">
+                <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} /> {rerunning ? 'Triggering…' : 'Restart Now'}
+              </button>
+              <button onClick={handleTogglePause} disabled={pausing}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors disabled:opacity-50 ${
+                  isPaused
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                }`}>
+                {isPaused ? <Play size={12} /> : <Pause size={12} />}
+                {pausing ? '…' : isPaused ? 'Resume' : 'Pause'}
+              </button>
+            </>
+          )}
+          {e.landingPageUrl && (
+            <a href={e.landingPageUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#111] border border-[#1E1E1E] hover:border-blue-500/30 rounded-xl text-xs text-blue-400 transition-colors">
+              <ExternalLink size={12} /> View landing page
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
