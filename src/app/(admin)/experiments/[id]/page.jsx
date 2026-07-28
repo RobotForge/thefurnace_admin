@@ -266,8 +266,18 @@ export default function ExperimentDetailPage() {
 
     setRerunning(true);
     try {
-      await httpsCallable(functions, 'adminRerunExperiment')({ uid, experimentId: String(id) });
-      showToast('Restart triggered — running in the background');
+      const res = await httpsCallable(functions, 'adminRerunExperiment')({ uid, experimentId: String(id) });
+      const result = res.data || {};
+      if (result.blocked) {
+        // ICP reframe needed or reachability dropped below the floor since launch —
+        // the backend refused the restart on purpose, not a call failure.
+        showToast(result.message || 'Restart refused — ICP needs attention before sourcing can resume', 'error');
+      } else if (result.problemSearchBackfilled) {
+        showToast('Restart triggered — backfilled a Problem Search report and running in the background');
+        load();
+      } else {
+        showToast('Restart triggered — running in the background');
+      }
     } catch (e) {
       showToast(e.message || 'Failed', 'error');
     } finally {
@@ -317,7 +327,7 @@ export default function ExperimentDetailPage() {
             <>
               <button onClick={handleRerun} disabled={rerunning}
                 className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-xl text-xs font-bold text-blue-400 transition-colors disabled:opacity-50">
-                <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} /> {rerunning ? 'Triggering…' : 'Restart Now'}
+                <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} /> {rerunning ? 'Checking ICP & reachability…' : 'Restart Now'}
               </button>
               <button onClick={handleTogglePause} disabled={pausing}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors disabled:opacity-50 ${
