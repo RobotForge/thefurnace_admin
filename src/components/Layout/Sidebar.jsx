@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, FlaskConical, Search,
-  Megaphone, Globe, ListChecks, LogOut, Zap,
+  Megaphone, Globe, ListChecks, LogOut, Zap, FileSearch,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -16,6 +16,7 @@ const NAV = [
   { href: '/lead-discovery',  label: 'Lead Discovery', icon: Zap             },
   { href: '/landing-pages',   label: 'Landing Pages',  icon: Globe           },
   { href: '/outreach-test',   label: 'Outreach Test',  icon: Megaphone       },
+  { href: '/problem-scans',   label: 'Problem Scans',  icon: FileSearch      },
   { href: '/waitlist',        label: 'Waitlist',       icon: ListChecks      },
 ];
 

@@ -17,6 +17,19 @@ const STATUS_COLOR = {
   Scaled:    'text-violet-400 bg-violet-500/10 border-violet-500/20',
 };
 
+const SKIP_REASON_LABELS = {
+  no_icp_role:                                'no ICP role is set on this experiment',
+  no_message_angle_or_hypothesis:             'no message angle or hypothesis to search from',
+  sprint_hypothesis_lookup_failed:            "the experiment's hypothesis lookup failed",
+  no_message_angle_and_no_valid_sprint_id:    'no message angle and no valid experiment id to look up a hypothesis from',
+};
+
+function describeSkipReason(reason) {
+  if (SKIP_REASON_LABELS[reason]) return SKIP_REASON_LABELS[reason];
+  if (reason.startsWith('search_failed:')) return `the search itself failed (${reason.slice('search_failed:'.length).trim()})`;
+  return reason;
+}
+
 function StatCard({ icon: Icon, label, value, color = '#3B82F6' }) {
   return (
     <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-4">
@@ -275,6 +288,12 @@ export default function ExperimentDetailPage() {
       } else if (result.problemSearchBackfilled) {
         showToast('Restart triggered — backfilled a Problem Search report and running in the background');
         load();
+      } else if (result.problemSearchSkipReason) {
+        // Sourcing did restart — only the accessory Problem Search backfill
+        // was skipped/failed. Surface why rather than showing a plain
+        // success toast, since a silent skip here is exactly what's hard to
+        // diagnose from logs alone.
+        showToast(`Restart triggered, but couldn't backfill a Problem Search report — ${describeSkipReason(result.problemSearchSkipReason)}`, 'error');
       } else {
         showToast('Restart triggered — running in the background');
       }
