@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 
@@ -11,6 +12,7 @@ const PLAN_COLOR = {
 };
 
 export default function UsersPage() {
+  const router = useRouter();
   const [users, setUsers]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -59,7 +61,11 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {filtered.map((u, i) => (
-                <tr key={u.uid || i} className="border-b border-[#1A1A1A] last:border-0 hover:bg-white/[0.02] transition-colors">
+                <tr
+                  key={u.uid || i}
+                  onClick={() => u.uid && router.push(`/users/${u.uid}`)}
+                  className="border-b border-[#1A1A1A] last:border-0 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                >
                   <td className="px-4 py-3 text-gray-300">{u.email}</td>
                   <td className="px-4 py-3 text-white font-medium">{u.displayName || '—'}</td>
                   <td className="px-4 py-3 text-gray-400">{u.companyName || '—'}</td>
