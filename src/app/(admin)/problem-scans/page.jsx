@@ -3,9 +3,10 @@
 import { Fragment, useEffect, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
+import { generateProblemReportPdf } from '@/lib/problemReportPdf';
 import {
   Download, ChevronDown, ChevronRight, Mail, Phone,
-  DollarSign, MessageSquare, Users2, Building2,
+  DollarSign, MessageSquare, Users2, Building2, FileDown,
 } from 'lucide-react';
 
 const SIGNAL_META = {
@@ -129,6 +130,11 @@ export default function ProblemScansPage() {
     r.ideaText?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleDownloadPdf = (r) => {
+    if (!r.report) return;
+    generateProblemReportPdf(r.report, { title: r.name || r.email || 'Problem Scan' });
+  };
+
   const handleExportCSV = () => {
     if (!requests.length) return;
     const headers = ['Name', 'Email', 'Phone', 'Idea', 'Problem', 'ICP', 'Location', 'Signal', 'Mentions', 'Cost', 'Requested'];
@@ -180,8 +186,8 @@ export default function ProblemScansPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#1E1E1E]">
-                {['', 'Name', 'Email', 'Idea', 'Signal', 'Mentions', 'Cost', 'Requested'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-gray-600 uppercase tracking-widest">{h}</th>
+                {['', 'Name', 'Email', 'Idea', 'Signal', 'Mentions', 'Cost', 'Requested', ''].map((h, i) => (
+                  <th key={i} className="px-4 py-3 text-left text-[10px] font-bold text-gray-600 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -226,10 +232,20 @@ export default function ProblemScansPage() {
                       <td className="px-4 py-3 text-gray-500">
                         {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}
                       </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleDownloadPdf(r)}
+                          disabled={!r.report}
+                          title={r.report ? 'Download report as PDF' : 'No report data to export'}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <FileDown size={11} /> PDF
+                        </button>
+                      </td>
                     </tr>
                     {isExpanded && (
                       <tr>
-                        <td colSpan={8} className="p-0 bg-[#0D0D0D] border-b border-[#1A1A1A]">
+                        <td colSpan={9} className="p-0 bg-[#0D0D0D] border-b border-[#1A1A1A]">
                           <ReportDetail report={r.report} />
                         </td>
                       </tr>
