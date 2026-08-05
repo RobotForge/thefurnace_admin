@@ -7,7 +7,7 @@ import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
   ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign,
-  Pause, Play, RefreshCw,
+  Pause, Play, RefreshCw, Zap,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
