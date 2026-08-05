@@ -347,6 +347,8 @@ export default function LeadDiscoveryPage() {
   const [selected,  setSelected]  = useState(null);   // session object
   const [detail,    setDetail]    = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [stoppingAll, setStoppingAll] = useState(false);
+  const [pausingAll,  setPausingAll]  = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -431,7 +433,86 @@ export default function LeadDiscoveryPage() {
     } catch (e) { showToast(e.message || 'Cycle failed', 'error'); }
   };
 
+  const handleStopAll = async () => {
+    const targets = sessions.filter(s => s.status !== 'stopped');
+    if (targets.length === 0) {
+      showToast('No active or paused sessions to stop');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Stop all ${targets.length} active/paused session${targets.length === 1 ? '' : 's'}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setStoppingAll(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map(s => httpsCallable(functions, 'adminStopSession')({ uid: s.uid, experimentId: s.experimentId }))
+      );
+      const stoppedKeys = new Set(
+        targets
+          .filter((_, i) => results[i].status === 'fulfilled')
+          .map(s => `${s.uid}-${s.experimentId}`)
+      );
+      const failedCount = results.filter(r => r.status === 'rejected').length;
+
+      setSessions(prev => prev.map(s =>
+        stoppedKeys.has(`${s.uid}-${s.experimentId}`) ? { ...s, status: 'stopped' } : s
+      ));
+      setSelected(prev => prev && stoppedKeys.has(`${prev.uid}-${prev.experimentId}`)
+        ? { ...prev, status: 'stopped' } : prev);
+
+      if (failedCount === 0) {
+        showToast(`${stoppedKeys.size} session${stoppedKeys.size === 1 ? '' : 's'} stopped`);
+      } else {
+        showToast(`${stoppedKeys.size} stopped, ${failedCount} failed`, 'error');
+      }
+    } finally {
+      setStoppingAll(false);
+    }
+  };
+
+  const handlePauseAll = async () => {
+    const targets = sessions.filter(s => s.status === 'active');
+    if (targets.length === 0) {
+      showToast('No active sessions to pause');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Pause all ${targets.length} active session${targets.length === 1 ? '' : 's'}?`
+    );
+    if (!confirmed) return;
+
+    setPausingAll(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map(s => httpsCallable(functions, 'adminPauseSession')({ uid: s.uid, experimentId: s.experimentId }))
+      );
+      const pausedKeys = new Set(
+        targets
+          .filter((_, i) => results[i].status === 'fulfilled')
+          .map(s => `${s.uid}-${s.experimentId}`)
+      );
+      const failedCount = results.filter(r => r.status === 'rejected').length;
+
+      setSessions(prev => prev.map(s =>
+        pausedKeys.has(`${s.uid}-${s.experimentId}`) ? { ...s, status: 'paused' } : s
+      ));
+      setSelected(prev => prev && pausedKeys.has(`${prev.uid}-${prev.experimentId}`)
+        ? { ...prev, status: 'paused' } : prev);
+
+      if (failedCount === 0) {
+        showToast(`${pausedKeys.size} session${pausedKeys.size === 1 ? '' : 's'} paused`);
+      } else {
+        showToast(`${pausedKeys.size} paused, ${failedCount} failed`, 'error');
+      }
+    } finally {
+      setPausingAll(false);
+    }
+  };
+
   const activeCount = sessions.filter(s => s.status === 'active').length;
+  const stoppableCount = sessions.filter(s => s.status !== 'stopped').length;
   const totalLeads  = sessions.reduce((acc, s) => acc + (s.leadsDiscovered || 0), 0);
 
   return (
@@ -452,10 +533,20 @@ export default function LeadDiscoveryPage() {
               <span className="text-xs text-gray-500">{totalLeads.toLocaleString()} leads discovered</span>
             </div>
           </div>
-          <button onClick={handleForceCycle}
-            className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold rounded-lg hover:bg-orange-500/20 transition-colors">
-            Force Cycle
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handlePauseAll} disabled={pausingAll || activeCount === 0}
+              className="px-4 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold rounded-lg hover:bg-amber-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {pausingAll ? 'Pausing…' : 'Pause All'}
+            </button>
+            <button onClick={handleStopAll} disabled={stoppingAll || stoppableCount === 0}
+              className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {stoppingAll ? 'Stopping…' : 'Stop All'}
+            </button>
+            <button onClick={handleForceCycle}
+              className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold rounded-lg hover:bg-orange-500/20 transition-colors">
+              Force Cycle
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 py-6">

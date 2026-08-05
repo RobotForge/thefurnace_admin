@@ -6,7 +6,8 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
-  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign, Zap,
+  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign,
+  Pause, Play, RefreshCw,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
@@ -15,6 +16,19 @@ const STATUS_COLOR = {
   Planning:  'text-amber-400  bg-amber-500/10  border-amber-500/20',
   Scaled:    'text-violet-400 bg-violet-500/10 border-violet-500/20',
 };
+
+const SKIP_REASON_LABELS = {
+  no_icp_role:                                'no ICP role is set on this experiment',
+  no_message_angle_or_hypothesis:             'no message angle or hypothesis to search from',
+  sprint_hypothesis_lookup_failed:            "the experiment's hypothesis lookup failed",
+  no_message_angle_and_no_valid_sprint_id:    'no message angle and no valid experiment id to look up a hypothesis from',
+};
+
+function describeSkipReason(reason) {
+  if (SKIP_REASON_LABELS[reason]) return SKIP_REASON_LABELS[reason];
+  if (reason.startsWith('search_failed:')) return `the search itself failed (${reason.slice('search_failed:'.length).trim()})`;
+  return reason;
+}
 
 function StatCard({ icon: Icon, label, value, color = '#3B82F6' }) {
   return (
@@ -172,7 +186,7 @@ function LeadRow({ lead, expanded, onToggle }) {
           {lead.status && (
             <p className="text-[10px] text-gray-500 mb-2">Status: <span className="text-gray-300">{lead.status}</span> · Source: <span className="text-gray-300">{lead.sourceType || lead.source || '—'}</span></p>
           )}
-          {lead.notes && <p className="text-[10px] text-gray-500 mb-2 italic">"{lead.notes}"</p>}
+          {lead.notes && <p className="text-[10px] text-gray-500 mb-2 italic">&quot;{lead.notes}&quot;</p>}
 
           {lead.emailsSent.length === 0 ? (
             <p className="text-[10px] text-gray-600">No emails sent to this lead yet.</p>
@@ -210,56 +224,83 @@ export default function ExperimentDetailPage() {
   const [error, setError]     = useState(null);
   const [expandedLead, setExpandedLead] = useState(null);
   const [filter, setFilter]   = useState('all'); // all | inbound | outbound
-  const [form, setForm]       = useState(null);   // editable targeting fields
-  const [saving, setSaving]   = useState(false);
-  const [saveMsg, setSaveMsg] = useState(null);    // { type, text }
+  const [pausing, setPausing]     = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+  const [toast, setToast]         = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const load = () => {
-    setLoading(true);
-    return httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
-      .then(r => {
-        setData(r.data);
-        const ex  = r.data?.experiment || {};
-        const cfg = r.data?.apolloConfig || {};
-        let variants = '';
-        try { const a = JSON.parse(ex.icpRoleVariants || '[]'); if (Array.isArray(a)) variants = a.join(', '); } catch { /* leave blank */ }
-        setForm({
-          icpRole:         ex.icpRole         || '',
-          icpCompany:      ex.icpCompany      || '',
-          icpSize:         ex.icpSize         || '',
-          icpRoleVariants: variants,
-          location:        cfg.location       || '',
-          messageAngle:    ex.messageAngle    || '',
-          channel:         ex.channel         || '',
-          successCriteria: ex.successCriteria || '',
-        });
-        setError(null);
-      })
+    httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
+      .then(r => setData(r.data))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+  useEffect(load, [id]);
 
-  const handleSaveRestart = async () => {
-    if (!form || !data?.experiment) return;
-    setSaving(true); setSaveMsg(null);
+  const handleTogglePause = async () => {
+    const isPaused = data?.agentSession?.status === 'admin_paused';
+    const uid = data?.experiment?.user?.uid;
+    if (!uid) { showToast('No agent session owner found for this experiment', 'error'); return; }
+
+    const confirmed = window.confirm(
+      isPaused
+        ? 'Resume this experiment? Sourcing, enrichment, and outreach will pick back up on the next cycle.'
+        : 'Pause this experiment? This stops new lead sourcing/enrollment AND any already-queued outreach sends for this experiment only.'
+    );
+    if (!confirmed) return;
+
+    setPausing(true);
     try {
-      const ownerUid = data.experiment.user?.uid;
-      const res = await httpsCallable(functions, 'adminUpdateExperimentAndRestart')({
-        uid: ownerUid, experimentId: id, updates: form,
+      await httpsCallable(functions, isPaused ? 'adminResumeExperiment' : 'adminPauseExperiment')({
+        uid, experimentId: String(id),
       });
-      setSaveMsg({
-        type: 'success',
-        text: res.data?.restarted
-          ? 'Saved — outreach restarted with the new filters.'
-          : 'Saved. No active session to restart (check the experiment has an ICP + isn’t closed).',
-      });
-      await load();
-    } catch (err) {
-      setSaveMsg({ type: 'error', text: err.message || 'Failed to save.' });
+      load();
+      showToast(isPaused ? 'Experiment resumed' : 'Experiment paused');
+    } catch (e) {
+      showToast(e.message || 'Failed', 'error');
     } finally {
-      setSaving(false);
+      setPausing(false);
+    }
+  };
+
+  const handleRerun = async () => {
+    const uid = data?.experiment?.user?.uid;
+    if (!uid) { showToast('No agent session owner found for this experiment', 'error'); return; }
+
+    const confirmed = window.confirm(
+      'Restart this experiment now? This immediately re-runs lead sourcing/enrichment/enrollment against its existing config, without waiting for the next scheduled cycle.'
+    );
+    if (!confirmed) return;
+
+    setRerunning(true);
+    try {
+      const res = await httpsCallable(functions, 'adminRerunExperiment')({ uid, experimentId: String(id) });
+      const result = res.data || {};
+      if (result.blocked) {
+        // ICP reframe needed or reachability dropped below the floor since launch —
+        // the backend refused the restart on purpose, not a call failure.
+        showToast(result.message || 'Restart refused — ICP needs attention before sourcing can resume', 'error');
+      } else if (result.problemSearchBackfilled) {
+        showToast('Restart triggered — backfilled a Problem Search report and running in the background');
+        load();
+      } else if (result.problemSearchSkipReason) {
+        // Sourcing did restart — only the accessory Problem Search backfill
+        // was skipped/failed. Surface why rather than showing a plain
+        // success toast, since a silent skip here is exactly what's hard to
+        // diagnose from logs alone.
+        showToast(`Restart triggered, but couldn't backfill a Problem Search report — ${describeSkipReason(result.problemSearchSkipReason)}`, 'error');
+      } else {
+        showToast('Restart triggered — running in the background');
+      }
+    } catch (e) {
+      showToast(e.message || 'Failed', 'error');
+    } finally {
+      setRerunning(false);
     }
   };
 
@@ -271,11 +312,18 @@ export default function ExperimentDetailPage() {
     </div>
   );
 
-  const { experiment: e, leads, stats, costs, apolloConfig, apolloParams, socialCrawlQueries } = data;
+  const { experiment: e, leads, stats, costs, agentSession, apolloConfig, apolloParams, socialCrawlQueries } = data;
   const visibleLeads = leads.filter(l => filter === 'all' ? true : filter === 'inbound' ? l.isInbound : !l.isInbound);
+  const isPaused = agentSession?.status === 'admin_paused';
 
   return (
     <div className="p-8 space-y-6">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-lg border ${
+          toast.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+        }`}>{toast.msg}</div>
+      )}
+
       <button onClick={() => router.push('/experiments')} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-white transition-colors">
         <ArrowLeft size={13} /> Back to Experiments
       </button>
@@ -293,12 +341,31 @@ export default function ExperimentDetailPage() {
             #{e.number} · {e.user?.displayName || e.user?.email || 'Unknown founder'} · {e.channel || e.sprintType || '—'}
           </p>
         </div>
-        {e.landingPageUrl && (
-          <a href={e.landingPageUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#111] border border-[#1E1E1E] hover:border-blue-500/30 rounded-xl text-xs text-blue-400 transition-colors">
-            <ExternalLink size={12} /> View landing page
-          </a>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {agentSession && (
+            <>
+              <button onClick={handleRerun} disabled={rerunning}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-xl text-xs font-bold text-blue-400 transition-colors disabled:opacity-50">
+                <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} /> {rerunning ? 'Checking ICP & reachability…' : 'Restart Now'}
+              </button>
+              <button onClick={handleTogglePause} disabled={pausing}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors disabled:opacity-50 ${
+                  isPaused
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                }`}>
+                {isPaused ? <Play size={12} /> : <Pause size={12} />}
+                {pausing ? '…' : isPaused ? 'Resume' : 'Pause'}
+              </button>
+            </>
+          )}
+          {e.landingPageUrl && (
+            <a href={e.landingPageUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#111] border border-[#1E1E1E] hover:border-blue-500/30 rounded-xl text-xs text-blue-400 transition-colors">
+              <ExternalLink size={12} /> View landing page
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -418,7 +485,7 @@ export default function ExperimentDetailPage() {
             </div>
           ))}
           {apolloConfig?.industry && !apolloParams?.keywords && (
-            <p className="text-[9px] text-amber-500/80 mt-1">Industry "{apolloConfig.industry}" set but not applied (no keywords resolved).</p>
+            <p className="text-[9px] text-amber-500/80 mt-1">Industry &quot;{apolloConfig.industry}&quot; set but not applied (no keywords resolved).</p>
           )}
         </ApiCallCard>
 
