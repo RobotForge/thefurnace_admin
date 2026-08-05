@@ -224,6 +224,9 @@ export default function ExperimentDetailPage() {
   const [error, setError]     = useState(null);
   const [expandedLead, setExpandedLead] = useState(null);
   const [filter, setFilter]   = useState('all'); // all | inbound | outbound
+  const [form, setForm]       = useState(null);   // editable targeting fields
+  const [saving, setSaving]   = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);    // { type, text }
   const [pausing, setPausing]     = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [toast, setToast]         = useState(null);
@@ -234,13 +237,30 @@ export default function ExperimentDetailPage() {
   };
 
   const load = () => {
-    httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
-      .then(r => setData(r.data))
+    return httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
+      .then(r => {
+        setData(r.data);
+        const ex  = r.data?.experiment || {};
+        const cfg = r.data?.apolloConfig || {};
+        let variants = '';
+        try { const a = JSON.parse(ex.icpRoleVariants || '[]'); if (Array.isArray(a)) variants = a.join(', '); } catch { /* leave blank */ }
+        setForm({
+          icpRole:         ex.icpRole         || '',
+          icpCompany:      ex.icpCompany      || '',
+          icpSize:         ex.icpSize         || '',
+          icpRoleVariants: variants,
+          location:        cfg.location       || '',
+          messageAngle:    ex.messageAngle    || '',
+          channel:         ex.channel         || '',
+          successCriteria: ex.successCriteria || '',
+        });
+        setError(null);
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [id]);
+  useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTogglePause = async () => {
     const isPaused = data?.agentSession?.status === 'admin_paused';
@@ -301,6 +321,28 @@ export default function ExperimentDetailPage() {
       showToast(e.message || 'Failed', 'error');
     } finally {
       setRerunning(false);
+    }
+  };
+
+  const handleSaveRestart = async () => {
+    if (!form || !data?.experiment) return;
+    setSaving(true); setSaveMsg(null);
+    try {
+      const ownerUid = data.experiment.user?.uid;
+      const res = await httpsCallable(functions, 'adminUpdateExperimentAndRestart')({
+        uid: ownerUid, experimentId: id, updates: form,
+      });
+      setSaveMsg({
+        type: 'success',
+        text: res.data?.restarted
+          ? 'Saved — outreach restarted with the new filters.'
+          : 'Saved. No active session to restart (check the experiment has an ICP + isn’t closed).',
+      });
+      await load();
+    } catch (err) {
+      setSaveMsg({ type: 'error', text: err.message || 'Failed to save.' });
+    } finally {
+      setSaving(false);
     }
   };
 
