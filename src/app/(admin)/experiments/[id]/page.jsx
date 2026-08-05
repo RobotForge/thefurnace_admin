@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
-  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign,
+  ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign, Zap,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
@@ -210,13 +210,58 @@ export default function ExperimentDetailPage() {
   const [error, setError]     = useState(null);
   const [expandedLead, setExpandedLead] = useState(null);
   const [filter, setFilter]   = useState('all'); // all | inbound | outbound
+  const [form, setForm]       = useState(null);   // editable targeting fields
+  const [saving, setSaving]   = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);    // { type, text }
 
-  useEffect(() => {
-    httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
-      .then(r => setData(r.data))
+  const load = () => {
+    setLoading(true);
+    return httpsCallable(functions, 'adminGetExperimentDetail')({ experimentId: id })
+      .then(r => {
+        setData(r.data);
+        const ex  = r.data?.experiment || {};
+        const cfg = r.data?.apolloConfig || {};
+        let variants = '';
+        try { const a = JSON.parse(ex.icpRoleVariants || '[]'); if (Array.isArray(a)) variants = a.join(', '); } catch { /* leave blank */ }
+        setForm({
+          icpRole:         ex.icpRole         || '',
+          icpCompany:      ex.icpCompany      || '',
+          icpSize:         ex.icpSize         || '',
+          icpRoleVariants: variants,
+          location:        cfg.location       || '',
+          messageAngle:    ex.messageAngle    || '',
+          channel:         ex.channel         || '',
+          successCriteria: ex.successCriteria || '',
+        });
+        setError(null);
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+
+  const handleSaveRestart = async () => {
+    if (!form || !data?.experiment) return;
+    setSaving(true); setSaveMsg(null);
+    try {
+      const ownerUid = data.experiment.user?.uid;
+      const res = await httpsCallable(functions, 'adminUpdateExperimentAndRestart')({
+        uid: ownerUid, experimentId: id, updates: form,
+      });
+      setSaveMsg({
+        type: 'success',
+        text: res.data?.restarted
+          ? 'Saved — outreach restarted with the new filters.'
+          : 'Saved. No active session to restart (check the experiment has an ICP + isn’t closed).',
+      });
+      await load();
+    } catch (err) {
+      setSaveMsg({ type: 'error', text: err.message || 'Failed to save.' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return <div className="p-8 text-center text-sm text-gray-500">Loading experiment…</div>;
   if (error)   return (
@@ -284,6 +329,77 @@ export default function ExperimentDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Targeting & Restart Outreach */}
+      {form && (
+        <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Target size={13} className="text-[#3B82F6]" />
+            <p className="text-xs font-bold text-white">Edit Targeting & Restart Outreach</p>
+          </div>
+          <p className="text-[10px] text-gray-500 mb-4">
+            Updates the Apollo search filters (and what the founder sees), resets sourcing pagination, and immediately restarts sourcing + outreach for this experiment.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              ['icpRole',         'ICP Role / Title',                'e.g. Chief Revenue Officer'],
+              ['icpCompany',      'Industry / Company Type',         'e.g. B2B SaaS'],
+              ['icpSize',         'Company Size',                    'e.g. 200–500 employees'],
+              ['location',        'Location',                        'e.g. United States'],
+              ['icpRoleVariants', 'Role Variants (comma-separated)', 'e.g. Head of Sales, VP Sales'],
+              ['channel',         'Outreach Channel',                'e.g. Email'],
+            ].map(([key, label, ph]) => (
+              <div key={key}>
+                <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">{label}</label>
+                <input
+                  value={form[key]}
+                  onChange={ev => setForm(f => ({ ...f, [key]: ev.target.value }))}
+                  placeholder={ph}
+                  className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-700 focus:border-[#3B82F6]/50 outline-none transition-colors"
+                />
+              </div>
+            ))}
+            <div className="sm:col-span-2">
+              <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Message Angle</label>
+              <textarea
+                value={form.messageAngle}
+                onChange={ev => setForm(f => ({ ...f, messageAngle: ev.target.value }))}
+                rows={2}
+                className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-700 focus:border-[#3B82F6]/50 outline-none resize-none transition-colors"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Success Criteria</label>
+              <input
+                value={form.successCriteria}
+                onChange={ev => setForm(f => ({ ...f, successCriteria: ev.target.value }))}
+                className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-700 focus:border-[#3B82F6]/50 outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {saveMsg && (
+            <div className={`mt-3 text-[11px] rounded-lg px-3 py-2 border ${
+              saveMsg.type === 'success'
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}>
+              {saveMsg.text}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
+            <p className="text-[9px] text-gray-600">Pagination resets so the new filter re-searches from page 1.</p>
+            <button
+              onClick={handleSaveRestart}
+              disabled={saving || !form.icpRole.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+            >
+              <Zap size={12} /> {saving ? 'Saving & restarting…' : 'Save & Restart Outreach'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Cost breakdown */}
       <CostBreakdown costs={costs} />
