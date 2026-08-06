@@ -7,7 +7,7 @@ import { functions } from '@/lib/firebase';
 import {
   ArrowLeft, ExternalLink, Mail, Users, Inbox, Send,
   ChevronDown, ChevronRight, Eye, MessageSquare, Search, Target, DollarSign,
-  Pause, Play, RefreshCw, Zap,
+  Pause, Play, RefreshCw, Zap, CheckCircle, Sparkles,
 } from 'lucide-react';
 
 const STATUS_COLOR = {
@@ -389,7 +389,14 @@ export default function ExperimentDetailPage() {
   );
 
   const { experiment: e, leads, stats, costs, agentSession, apolloConfig, apolloParams, socialCrawlQueries } = data;
-  const visibleLeads = leads.filter(l => filter === 'all' ? true : filter === 'inbound' ? l.isInbound : !l.isInbound);
+  const visibleLeads = leads.filter(l => {
+    if (filter === 'all')      return true;
+    if (filter === 'inbound')  return l.isInbound;
+    if (filter === 'outbound') return !l.isInbound;
+    if (filter === 'enriched') return l.enrichmentStatus === 'enriched';
+    if (filter === 'verified') return l.verificationStatus === 'deliverable';
+    return true;
+  });
   const LEADS_PER_PAGE = 50;
   const pageCount = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PER_PAGE));
   const safePage  = Math.min(page, pageCount);
@@ -448,58 +455,82 @@ export default function ExperimentDetailPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-        <StatCard icon={Users} label="Discovered" value={agentSession?.leadsDiscovered ?? stats.outboundCount ?? 0} color="#3B82F6" />
-        <StatCard icon={Inbox} label="Inbound (Form)" value={stats.inboundCount} color="#10B981" />
-        <StatCard icon={Send} label="Outbound (Apollo)" value={stats.outboundCount} color="#8B5CF6" />
-        <StatCard icon={Mail} label="Emails Sent" value={stats.totalEmailsSent} color="#F59E0B" />
-        <StatCard icon={Eye} label="Page Visits" value={e.visitCount ?? '—'} color="#EC4899" />
-        <StatCard icon={DollarSign} label="Total Cost" value={formatCost(costs?.total)} color="#10B981" />
+      {/* Funnel: total pool → pulled → enriched → verified → emailed */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatCard icon={Search}      label="Total in Apollo" value={(agentSession?.apolloTotalEntries ?? 0).toLocaleString()} color="#64748B" />
+        <StatCard icon={Users}       label="Discovered"      value={agentSession?.leadsDiscovered ?? stats.outboundCount ?? 0} color="#3B82F6" />
+        <StatCard icon={Sparkles}    label="Enriched"        value={agentSession?.leadsEnriched ?? stats.enrichedCount ?? 0} color="#8B5CF6" />
+        <StatCard icon={CheckCircle} label="Verified"        value={stats.verifiedCount ?? 0} color="#10B981" />
+        <StatCard icon={Mail}        label="Emails Sent"     value={stats.totalEmailsSent} color="#F59E0B" />
+      </div>
+      <p className="text-[10px] text-gray-600 -mt-1">
+        Total pool in Apollo → pulled per page (<span className="text-gray-400">Discovered</span>) → got an email (<span className="text-gray-400">Enriched</span>) → confirmed deliverable (<span className="text-gray-400">Verified</span> — the only ones emailed).
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard icon={Inbox}      label="Inbound (Form)"    value={stats.inboundCount} color="#10B981" />
+        <StatCard icon={Send}       label="Outbound (Apollo)" value={stats.outboundCount} color="#8B5CF6" />
+        <StatCard icon={Eye}        label="Page Visits"       value={e.visitCount ?? '—'} color="#EC4899" />
+        <StatCard icon={DollarSign} label="Total Cost"        value={formatCost(costs?.total)} color="#10B981" />
       </div>
 
-      {/* Lead-count integrity warning — shows when the discovered counter drifts
-          from the actual saved rows, or when writes have failed. */}
-      {agentSession && ((agentSession.leadWriteFailures ?? 0) > 0 || (agentSession.leadsDiscovered ?? 0) !== stats.outboundCount) && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-red-400 mb-1">⚠ Lead count mismatch</p>
-              <p className="text-[11px] text-red-300/90 leading-relaxed">
-                Discovered counter = <span className="font-bold">{(agentSession.leadsDiscovered ?? 0).toLocaleString()}</span>,
-                but actually saved to the database = <span className="font-bold">{stats.outboundCount.toLocaleString()}</span> outbound rows.
-                {(agentSession.leadWriteFailures ?? 0) > 0 && (
-                  <> {' '}{agentSession.leadWriteFailures.toLocaleString()} write{agentSession.leadWriteFailures === 1 ? '' : 's'} failed.</>
+      {/* Lead-data tools — always available. Turns red when the discovered
+          counter drifts from the saved rows, or when writes have failed. */}
+      {agentSession && (() => {
+        const mismatch = (agentSession.leadsDiscovered ?? 0) !== stats.outboundCount;
+        const failures = (agentSession.leadWriteFailures ?? 0) > 0;
+        const alert = mismatch || failures;
+        return (
+          <div className={`rounded-2xl p-4 border ${alert ? 'bg-red-500/10 border-red-500/20' : 'bg-[#111] border-[#1E1E1E]'}`}>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                {alert ? (
+                  <>
+                    <p className="text-xs font-bold text-red-400 mb-1">⚠ Lead count mismatch</p>
+                    <p className="text-[11px] text-red-300/90 leading-relaxed">
+                      Discovered counter = <span className="font-bold">{(agentSession.leadsDiscovered ?? 0).toLocaleString()}</span>,
+                      but actually saved to the database = <span className="font-bold">{stats.outboundCount.toLocaleString()}</span> outbound rows.
+                      {failures && (
+                        <> {' '}{agentSession.leadWriteFailures.toLocaleString()} write{agentSession.leadWriteFailures === 1 ? '' : 's'} failed.</>
+                      )}
+                    </p>
+                    {agentSession.lastLeadWriteError?.message && (
+                      <p className="text-[10px] text-gray-500 mt-1.5 font-mono break-words">
+                        Last DB error: {agentSession.lastLeadWriteError.message}
+                        {agentSession.lastLeadWriteError.ts ? ` · ${new Date(agentSession.lastLeadWriteError.ts).toLocaleString()}` : ''}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-bold text-gray-300 mb-1">Lead data tools</p>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                      Counts look consistent. <span className="text-gray-400">Recover</span> pulls any RTDB-only leads into the database; <span className="text-gray-400">Reconcile</span> just corrects the displayed count.
+                    </p>
+                  </>
                 )}
-              </p>
-              {agentSession.lastLeadWriteError?.message && (
-                <p className="text-[10px] text-gray-500 mt-1.5 font-mono break-words">
-                  Last DB error: {agentSession.lastLeadWriteError.message}
-                  {agentSession.lastLeadWriteError.ts ? ` · ${new Date(agentSession.lastLeadWriteError.ts).toLocaleString()}` : ''}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col gap-2 flex-shrink-0">
-              <button
-                onClick={handleRecover}
-                disabled={recovering}
-                title="Re-save the enriched leads sitting in RTDB into Data Connect, then reconcile the count"
-                className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 text-xs font-semibold text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {recovering ? 'Recovering…' : 'Recover leads from RTDB'}
-              </button>
-              <button
-                onClick={handleReconcile}
-                disabled={reconciling}
-                title="Just fix the displayed number to match what's actually in the database (no recovery)"
-                className="px-3 py-2 bg-white/5 border border-[#2A2A2A] hover:border-red-500/40 text-xs font-semibold text-gray-200 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {reconciling ? 'Reconciling…' : 'Just reconcile count'}
-              </button>
+              </div>
+              <div className="flex flex-col gap-2 flex-shrink-0">
+                <button
+                  onClick={handleRecover}
+                  disabled={recovering}
+                  title="Re-save the enriched leads sitting in RTDB into Data Connect, then reconcile the count"
+                  className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 text-xs font-semibold text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {recovering ? 'Recovering…' : 'Recover leads from RTDB'}
+                </button>
+                <button
+                  onClick={handleReconcile}
+                  disabled={reconciling}
+                  title="Just fix the displayed number to match what's actually in the database (no recovery)"
+                  className="px-3 py-2 bg-white/5 border border-[#2A2A2A] hover:border-[#3A3A3A] text-xs font-semibold text-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {reconciling ? 'Reconciling…' : 'Reconcile count'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Experiment details */}
       <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5">
@@ -606,7 +637,7 @@ export default function ExperimentDetailPage() {
               <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Total matching in Apollo</p>
               <p className="text-lg font-bold text-white">
                 {agentSession.apolloTotalEntries.toLocaleString()}
-                <span className="text-[10px] font-normal text-gray-500"> leads · {(agentSession.apolloTotalPages ?? 0).toLocaleString()} pages</span>
+                <span className="text-[10px] font-normal text-gray-500"> leads · {(agentSession.apolloTotalPages || Math.ceil((agentSession.apolloTotalEntries || 0) / 25)).toLocaleString()} pages</span>
               </p>
             </div>
           )}
@@ -659,7 +690,7 @@ export default function ExperimentDetailPage() {
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-bold text-white">Leads <span className="text-gray-600 font-normal">({leads.length})</span></p>
           <div className="flex items-center gap-1">
-            {[['all', 'All'], ['inbound', 'Inbound'], ['outbound', 'Outbound']].map(([key, label]) => (
+            {[['all', 'All'], ['outbound', 'Outbound'], ['enriched', 'Enriched'], ['verified', 'Verified'], ['inbound', 'Inbound']].map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => { setFilter(key); setPage(1); }}
