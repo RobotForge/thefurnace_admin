@@ -520,6 +520,15 @@ export default function ExperimentDetailPage() {
           subtitle="Params sent to POST /mixed_people/api_search for outbound sourcing"
           empty={!apolloParams ? 'No agent session found for this experiment (Apollo sourcing hasn’t run yet).' : null}
         >
+          {apolloParams && (agentSession?.apolloTotalEntries ?? 0) > 0 && (
+            <div className="mb-1 pb-3 border-b border-[#1E1E1E]">
+              <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Total matching in Apollo</p>
+              <p className="text-lg font-bold text-white">
+                {agentSession.apolloTotalEntries.toLocaleString()}
+                <span className="text-[10px] font-normal text-gray-500"> leads · {(agentSession.apolloTotalPages ?? 0).toLocaleString()} pages</span>
+              </p>
+            </div>
+          )}
           {apolloParams && Object.entries(APOLLO_PARAM_LABELS).map(([key, label]) => (
             <div key={key}>
               <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">{label}</p>
