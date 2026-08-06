@@ -232,6 +232,7 @@ export default function ExperimentDetailPage() {
   const [rerunning, setRerunning] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [recovering, setRecovering]   = useState(false);
+  const [beginning, setBeginning]     = useState(false);
   const [toast, setToast]         = useState(null);
 
   const showToast = (msg, type = 'success') => {
@@ -361,6 +362,30 @@ export default function ExperimentDetailPage() {
       showToast(err.message || 'Reconcile failed', 'error');
     } finally {
       setReconciling(false);
+    }
+  };
+
+  const handleBeginOutreach = async (force = false) => {
+    if (!data?.experiment) return;
+    setBeginning(true);
+    try {
+      const ownerUid = data.experiment.user?.uid;
+      const res = await httpsCallable(functions, 'adminBeginOutreach')({ uid: ownerUid, experimentId: id, force });
+      const d = res.data || {};
+      if (d.blocked && d.reason === 'founder_not_paid') {
+        setBeginning(false);
+        if (window.confirm('This founder is on the Free plan. Send outreach anyway (override)?')) {
+          return handleBeginOutreach(true);
+        }
+        showToast('Outreach not started — founder is on the Free plan.', 'error');
+        return;
+      }
+      showToast(`Outreach started — ${d.resumed || 0} verified lead${d.resumed === 1 ? '' : 's'} enrolled/sent.`);
+      await load();
+    } catch (err) {
+      showToast(err.message || 'Begin outreach failed', 'error');
+    } finally {
+      setBeginning(false);
     }
   };
 
@@ -510,6 +535,14 @@ export default function ExperimentDetailPage() {
                 )}
               </div>
               <div className="flex flex-col gap-2 flex-shrink-0">
+                <button
+                  onClick={() => handleBeginOutreach(false)}
+                  disabled={beginning}
+                  title="Enrol + email the gated, verified-deliverable leads now (and run a sourcing pass). Verified-only; paid founders."
+                  className="px-3 py-2 bg-blue-500/10 border border-blue-500/30 hover:border-blue-500/50 text-xs font-semibold text-blue-300 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {beginning ? 'Starting…' : 'Begin outreach'}
+                </button>
                 <button
                   onClick={handleRecover}
                   disabled={recovering}
