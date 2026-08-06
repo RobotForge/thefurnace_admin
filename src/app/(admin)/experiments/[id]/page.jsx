@@ -154,6 +154,105 @@ function SourceBadge({ isInbound }) {
   );
 }
 
+// step 0 = the first touch; 1+ are timed follow-ups. null = a pre-fix send that
+// didn't record its step (older than the stepIndex-on-emailTracking change).
+function stageLabel(stepIndex) {
+  if (stepIndex == null || stepIndex === '') return { text: 'Stage unknown', tone: 'text-gray-500 bg-white/5 border-[#2A2A2A]' };
+  if (stepIndex === 0) return { text: 'Step 1 · First touch', tone: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+  return { text: `Step ${stepIndex + 1} · Follow-up`, tone: 'text-violet-400 bg-violet-500/10 border-violet-500/20' };
+}
+
+function StageBadge({ stepIndex }) {
+  const s = stageLabel(stepIndex);
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${s.tone}`}>
+      {s.text}
+    </span>
+  );
+}
+
+// "Who received an email and what stage they're at" — the flat send ledger.
+function SentEmailsSection({ sentEmails }) {
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 50;
+  const rows = sentEmails || [];
+  const pageCount = Math.max(1, Math.ceil(rows.length / PER_PAGE));
+  const safePage  = Math.min(page, pageCount);
+  const paged     = rows.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Send size={13} className="text-[#F59E0B]" />
+          <p className="text-xs font-bold text-white">Emails Sent <span className="text-gray-600 font-normal">({rows.length.toLocaleString()})</span></p>
+        </div>
+        <p className="text-[10px] text-gray-600">Each recipient and the sequence stage they received</p>
+      </div>
+      <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="px-5 py-8 text-xs text-gray-600 text-center">No emails have been sent for this experiment yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-[#1E1E1E] text-[9px] font-bold text-gray-600 uppercase tracking-widest">
+                  <th className="px-4 py-2.5 font-bold">Recipient</th>
+                  <th className="px-4 py-2.5 font-bold hidden md:table-cell">Company</th>
+                  <th className="px-4 py-2.5 font-bold">Stage</th>
+                  <th className="px-4 py-2.5 font-bold hidden lg:table-cell">Subject</th>
+                  <th className="px-4 py-2.5 font-bold whitespace-nowrap">Sent</th>
+                  <th className="px-4 py-2.5 font-bold text-right">Engagement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paged.map((s, i) => (
+                  <tr key={`${s.leadId}-${s.stepIndex}-${i}`} className="border-b border-[#1A1A1A] last:border-0 hover:bg-white/[0.02] transition-colors">
+                    <td className="px-4 py-3 min-w-0">
+                      <p className="text-xs font-semibold text-white truncate max-w-[220px]">{s.name || 'Unknown'}</p>
+                      {s.email && <p className="text-[10px] text-gray-500 truncate max-w-[220px]">{s.email}</p>}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <span className="text-[11px] text-gray-400">{s.company || '—'}</span>
+                    </td>
+                    <td className="px-4 py-3"><StageBadge stepIndex={s.stepIndex} /></td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <span className="text-[11px] text-gray-300 line-clamp-1 max-w-[280px]">{s.subject || '(no subject)'}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-[10px] text-gray-500">{s.sentAt ? new Date(s.sentAt).toLocaleString() : '—'}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-3">
+                        <span className={`flex items-center gap-1 text-[10px] ${s.opens > 0 ? 'text-amber-400' : 'text-gray-700'}`}><Eye size={10} /> {s.opens}</span>
+                        <span className={`flex items-center gap-1 text-[10px] ${s.replies > 0 ? 'text-emerald-400' : 'text-gray-700'}`}><MessageSquare size={10} /> {s.replies}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {rows.length > PER_PAGE && (
+        <div className="flex items-center justify-between mt-3 text-xs">
+          <span className="text-gray-600">
+            Showing {(safePage - 1) * PER_PAGE + 1}–{Math.min(safePage * PER_PAGE, rows.length)} of {rows.length.toLocaleString()}
+          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage <= 1}
+              className="px-3 py-1.5 rounded-lg bg-[#111] border border-[#1E1E1E] text-gray-300 hover:border-[#2A2A2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Prev</button>
+            <span className="text-gray-500">Page {safePage} of {pageCount}</span>
+            <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={safePage >= pageCount}
+              className="px-3 py-1.5 rounded-lg bg-[#111] border border-[#1E1E1E] text-gray-300 hover:border-[#2A2A2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeadRow({ lead, expanded, onToggle }) {
   return (
     <div className="border-b border-[#1A1A1A] last:border-0">
@@ -197,7 +296,10 @@ function LeadRow({ lead, expanded, onToggle }) {
                 <div key={i} className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 flex items-center gap-3">
                   <Mail size={11} className="text-blue-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-gray-200 truncate">{e.subject || '(no subject)'}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[11px] text-gray-200 truncate">{e.subject || '(no subject)'}</p>
+                      <StageBadge stepIndex={e.stepIndex} />
+                    </div>
                     <p className="text-[9px] text-gray-600">{e.sentAt ? new Date(e.sentAt).toLocaleString() : 'unknown time'}</p>
                   </div>
                   {e.opens > 0 && (
@@ -413,7 +515,7 @@ export default function ExperimentDetailPage() {
     </div>
   );
 
-  const { experiment: e, leads, stats, costs, agentSession, apolloConfig, apolloParams, socialCrawlQueries } = data;
+  const { experiment: e, leads, sentEmails, stats, costs, agentSession, apolloConfig, apolloParams, socialCrawlQueries } = data;
   const visibleLeads = leads.filter(l => {
     if (filter === 'all')      return true;
     if (filter === 'inbound')  return l.isInbound;
@@ -564,6 +666,9 @@ export default function ExperimentDetailPage() {
           </div>
         );
       })()}
+
+      {/* Emails sent — who received what stage */}
+      <SentEmailsSection sentEmails={sentEmails} />
 
       {/* Experiment details */}
       <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5">
