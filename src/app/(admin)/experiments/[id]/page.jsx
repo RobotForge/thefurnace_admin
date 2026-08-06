@@ -230,6 +230,7 @@ export default function ExperimentDetailPage() {
   const [pausing, setPausing]     = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [reconciling, setReconciling] = useState(false);
+  const [recovering, setRecovering]   = useState(false);
   const [toast, setToast]         = useState(null);
 
   const showToast = (msg, type = 'success') => {
@@ -362,6 +363,22 @@ export default function ExperimentDetailPage() {
     }
   };
 
+  const handleRecover = async () => {
+    if (!data?.experiment) return;
+    setRecovering(true);
+    try {
+      const ownerUid = data.experiment.user?.uid;
+      const res = await httpsCallable(functions, 'adminBackfillLeadsFromRTDB')({ uid: ownerUid, experimentId: id });
+      const d = res.data || {};
+      showToast(`Recovered ${d.recovered}/${d.total} leads into the database${d.failed ? ` · ${d.failed} still failing (${d.lastError || ''})` : ''}`, d.failed ? 'error' : 'success');
+      await load();
+    } catch (err) {
+      showToast(err.message || 'Recovery failed', 'error');
+    } finally {
+      setRecovering(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-sm text-gray-500">Loading experiment…</div>;
   if (error)   return (
     <div className="p-8">
@@ -457,13 +474,24 @@ export default function ExperimentDetailPage() {
                 </p>
               )}
             </div>
-            <button
-              onClick={handleReconcile}
-              disabled={reconciling}
-              className="flex-shrink-0 px-3 py-2 bg-white/5 border border-[#2A2A2A] hover:border-red-500/40 text-xs font-semibold text-gray-200 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {reconciling ? 'Reconciling…' : 'Reconcile count'}
-            </button>
+            <div className="flex flex-col gap-2 flex-shrink-0">
+              <button
+                onClick={handleRecover}
+                disabled={recovering}
+                title="Re-save the enriched leads sitting in RTDB into Data Connect, then reconcile the count"
+                className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 text-xs font-semibold text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {recovering ? 'Recovering…' : 'Recover leads from RTDB'}
+              </button>
+              <button
+                onClick={handleReconcile}
+                disabled={reconciling}
+                title="Just fix the displayed number to match what's actually in the database (no recovery)"
+                className="px-3 py-2 bg-white/5 border border-[#2A2A2A] hover:border-red-500/40 text-xs font-semibold text-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {reconciling ? 'Reconciling…' : 'Just reconcile count'}
+              </button>
+            </div>
           </div>
         </div>
       )}
