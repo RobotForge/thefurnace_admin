@@ -224,6 +224,7 @@ export default function ExperimentDetailPage() {
   const [error, setError]     = useState(null);
   const [expandedLead, setExpandedLead] = useState(null);
   const [filter, setFilter]   = useState('all'); // all | inbound | outbound
+  const [page, setPage]       = useState(1);      // leads table pagination
   const [form, setForm]       = useState(null);   // editable targeting fields
   const [saving, setSaving]   = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);    // { type, text }
@@ -389,6 +390,10 @@ export default function ExperimentDetailPage() {
 
   const { experiment: e, leads, stats, costs, agentSession, apolloConfig, apolloParams, socialCrawlQueries } = data;
   const visibleLeads = leads.filter(l => filter === 'all' ? true : filter === 'inbound' ? l.isInbound : !l.isInbound);
+  const LEADS_PER_PAGE = 50;
+  const pageCount = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PER_PAGE));
+  const safePage  = Math.min(page, pageCount);
+  const pagedLeads = visibleLeads.slice((safePage - 1) * LEADS_PER_PAGE, safePage * LEADS_PER_PAGE);
   const isPaused = agentSession?.status === 'admin_paused';
 
   return (
@@ -657,7 +662,7 @@ export default function ExperimentDetailPage() {
             {[['all', 'All'], ['inbound', 'Inbound'], ['outbound', 'Outbound']].map(([key, label]) => (
               <button
                 key={key}
-                onClick={() => setFilter(key)}
+                onClick={() => { setFilter(key); setPage(1); }}
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors ${
                   filter === key ? 'bg-[#3B82F6]/15 text-blue-400 border border-blue-500/25' : 'text-gray-600 hover:text-gray-400'
                 }`}
@@ -671,16 +676,45 @@ export default function ExperimentDetailPage() {
           {visibleLeads.length === 0 ? (
             <p className="px-5 py-8 text-xs text-gray-600 text-center">No leads in this category.</p>
           ) : (
-            visibleLeads.map((lead, i) => (
-              <LeadRow
-                key={lead.firebaseId || i}
-                lead={lead}
-                expanded={expandedLead === (lead.firebaseId || i)}
-                onToggle={() => setExpandedLead(expandedLead === (lead.firebaseId || i) ? null : (lead.firebaseId || i))}
-              />
-            ))
+            pagedLeads.map((lead, i) => {
+              const rowId = lead.firebaseId || `${safePage}-${i}`;
+              return (
+                <LeadRow
+                  key={rowId}
+                  lead={lead}
+                  expanded={expandedLead === rowId}
+                  onToggle={() => setExpandedLead(expandedLead === rowId ? null : rowId)}
+                />
+              );
+            })
           )}
         </div>
+
+        {/* Pagination */}
+        {visibleLeads.length > LEADS_PER_PAGE && (
+          <div className="flex items-center justify-between mt-3 text-xs">
+            <span className="text-gray-600">
+              Showing {(safePage - 1) * LEADS_PER_PAGE + 1}–{Math.min(safePage * LEADS_PER_PAGE, visibleLeads.length)} of {visibleLeads.length.toLocaleString()}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="px-3 py-1.5 rounded-lg bg-[#111] border border-[#1E1E1E] text-gray-300 hover:border-[#2A2A2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              <span className="text-gray-500">Page {safePage} of {pageCount}</span>
+              <button
+                onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+                disabled={safePage >= pageCount}
+                className="px-3 py-1.5 rounded-lg bg-[#111] border border-[#1E1E1E] text-gray-300 hover:border-[#2A2A2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
