@@ -55,7 +55,7 @@ function DetailField({ label, value }) {
 const APOLLO_PARAM_LABELS = {
   personTitles:   'Person titles',
   locations:      'Person locations',
-  keywords:       'Keywords (q_keywords)',
+  keywordTags:    'Keyword tags (q_organization_keyword_tags)',
   employeeRanges: 'Employee count range',
   limit:          'Page size (per_page)',
   page:           'Page',
@@ -526,8 +526,8 @@ export default function ExperimentDetailPage() {
               <ParamValue value={apolloParams[key]} />
             </div>
           ))}
-          {apolloConfig?.industry && !apolloParams?.keywords && (
-            <p className="text-[9px] text-amber-500/80 mt-1">Industry &quot;{apolloConfig.industry}&quot; set but not applied (no keywords resolved).</p>
+          {apolloConfig?.industry && !apolloParams?.keywordTags && (
+            <p className="text-[9px] text-amber-500/80 mt-1">Industry &quot;{apolloConfig.industry}&quot; set but not applied (no keyword tags resolved).</p>
           )}
         </ApiCallCard>
 
