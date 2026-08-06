@@ -229,6 +229,7 @@ export default function ExperimentDetailPage() {
   const [saveMsg, setSaveMsg] = useState(null);    // { type, text }
   const [pausing, setPausing]     = useState(false);
   const [rerunning, setRerunning] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   const [toast, setToast]         = useState(null);
 
   const showToast = (msg, type = 'success') => {
@@ -346,6 +347,21 @@ export default function ExperimentDetailPage() {
     }
   };
 
+  const handleReconcile = async () => {
+    if (!data?.experiment) return;
+    setReconciling(true);
+    try {
+      const ownerUid = data.experiment.user?.uid;
+      const res = await httpsCallable(functions, 'adminReconcileLeadCounts')({ uid: ownerUid, experimentId: id });
+      showToast(`Discovered count corrected: ${res.data?.before} → ${res.data?.after}`);
+      await load();
+    } catch (err) {
+      showToast(err.message || 'Reconcile failed', 'error');
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-sm text-gray-500">Loading experiment…</div>;
   if (error)   return (
     <div className="p-8">
@@ -419,6 +435,38 @@ export default function ExperimentDetailPage() {
         <StatCard icon={Eye} label="Page Visits" value={e.visitCount ?? '—'} color="#EC4899" />
         <StatCard icon={DollarSign} label="Total Cost" value={formatCost(costs?.total)} color="#10B981" />
       </div>
+
+      {/* Lead-count integrity warning — shows when the discovered counter drifts
+          from the actual saved rows, or when writes have failed. */}
+      {agentSession && ((agentSession.leadWriteFailures ?? 0) > 0 || (agentSession.leadsDiscovered ?? 0) !== stats.outboundCount) && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-red-400 mb-1">⚠ Lead count mismatch</p>
+              <p className="text-[11px] text-red-300/90 leading-relaxed">
+                Discovered counter = <span className="font-bold">{(agentSession.leadsDiscovered ?? 0).toLocaleString()}</span>,
+                but actually saved to the database = <span className="font-bold">{stats.outboundCount.toLocaleString()}</span> outbound rows.
+                {(agentSession.leadWriteFailures ?? 0) > 0 && (
+                  <> {' '}{agentSession.leadWriteFailures.toLocaleString()} write{agentSession.leadWriteFailures === 1 ? '' : 's'} failed.</>
+                )}
+              </p>
+              {agentSession.lastLeadWriteError?.message && (
+                <p className="text-[10px] text-gray-500 mt-1.5 font-mono break-words">
+                  Last DB error: {agentSession.lastLeadWriteError.message}
+                  {agentSession.lastLeadWriteError.ts ? ` · ${new Date(agentSession.lastLeadWriteError.ts).toLocaleString()}` : ''}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleReconcile}
+              disabled={reconciling}
+              className="flex-shrink-0 px-3 py-2 bg-white/5 border border-[#2A2A2A] hover:border-red-500/40 text-xs font-semibold text-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {reconciling ? 'Reconciling…' : 'Reconcile count'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Experiment details */}
       <div className="bg-[#111] border border-[#1E1E1E] rounded-2xl p-5">
