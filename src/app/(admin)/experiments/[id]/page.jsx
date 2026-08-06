@@ -452,7 +452,7 @@ export default function ExperimentDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               ['icpRole',         'ICP Role / Title',                'e.g. Chief Revenue Officer'],
-              ['icpCompany',      'Industry / Company Type',         'e.g. B2B SaaS'],
+              ['icpCompany',      'Keyword tags — comma-separated phrases', 'e.g. pool service, pool cleaning, pool repair'],
               ['icpSize',         'Company Size',                    'e.g. 200–500 employees'],
               ['location',        'Location',                        'e.g. United States'],
               ['icpRoleVariants', 'Role Variants (comma-separated)', 'e.g. Head of Sales, VP Sales'],
