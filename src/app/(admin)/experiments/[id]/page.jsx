@@ -412,7 +412,7 @@ export default function ExperimentDetailPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-        <StatCard icon={Users} label="Total Leads" value={stats.totalLeads} color="#3B82F6" />
+        <StatCard icon={Users} label="Discovered" value={agentSession?.leadsDiscovered ?? stats.outboundCount ?? 0} color="#3B82F6" />
         <StatCard icon={Inbox} label="Inbound (Form)" value={stats.inboundCount} color="#10B981" />
         <StatCard icon={Send} label="Outbound (Apollo)" value={stats.outboundCount} color="#8B5CF6" />
         <StatCard icon={Mail} label="Emails Sent" value={stats.totalEmailsSent} color="#F59E0B" />
@@ -576,7 +576,7 @@ export default function ExperimentDetailPage() {
       {/* Leads */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-bold text-white">Leads Discovered</p>
+          <p className="text-xs font-bold text-white">Leads <span className="text-gray-600 font-normal">({leads.length})</span></p>
           <div className="flex items-center gap-1">
             {[['all', 'All'], ['inbound', 'Inbound'], ['outbound', 'Outbound']].map(([key, label]) => (
               <button
